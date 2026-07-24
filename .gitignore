@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments / tooling caches
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets — NFR-06: never commit real secrets, only .env.example
+.env
+
+# Research data and results (NFR-07: corpora archived separately; kept out of the
+# working tree except for the .gitkeep placeholders that hold the layout).
+data/*
+!data/.gitkeep
+results/*
+!results/.gitkeep

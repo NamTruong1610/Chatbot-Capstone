@@ -1,0 +1,11 @@
+id: C2-hybrid-rerank
+extends: C0-baseline
+description: >
+  Adds cross-encoder reranking over the fused candidate set. RQ1 arm 3 — the proposal's
+  "full" pipeline. The manipulation is exactly the two keys below; verify with
+  `python -m chatbot.config diff C0-baseline C2-hybrid-rerank`.
+rq: [1]
+overrides:
+  retrieval:
+    mode: hybrid_rerank
+    reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2

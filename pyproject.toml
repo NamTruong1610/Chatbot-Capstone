@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chatbot"
+version = "0.0.0"
+description = "Configurable RAG pipeline + evaluation harness (UTS Honours research artefact)"
+readme = "docs/README.md"
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+authors = [{ name = "Hai Nam Truong" }]
+
+# Runtime dependencies are added phase by phase. Phase 0 (the config system) needs
+# only YAML parsing and typed validation — nothing else is built yet, and pulling in
+# ingestion/retrieval/store deps now would lock in choices the config system owns.
+dependencies = [
+    "pydantic>=2.6,<3",
+    "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "ruff>=0.5,<1",
+    "mypy>=1.10,<2",
+    "types-PyYAML>=6,<7",
+]
+
+[project.scripts]
+# Convenience alias; the documented entry point is `python -m chatbot.config`.
+chatbot-config = "chatbot.config.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chatbot"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+# Boring, well-trodden rule set: pycodestyle, pyflakes, isort, bugbear, pyupgrade.
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# src layout: put the package on the path for tests without requiring an install.
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"

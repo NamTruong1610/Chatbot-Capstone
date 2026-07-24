@@ -1,0 +1,90 @@
+id: C0-baseline
+extends: null
+rq: []
+description: >
+  The reference configuration every other config is measured against: dense retrieval,
+  typed chunking, prefilter access control, base LLM. Do not change once results exist
+  (CLAUDE.md rule 8). As the root config it uniquely carries the complete parameter tree
+  under `overrides`; every other config overrides only what it manipulates.
+
+# The complete tree. Values mirror the documented defaults in docs/03 §2 verbatim, stated
+# explicitly here so the baseline is a self-describing, auditable record rather than a set
+# of implicit schema defaults.
+overrides:
+  ingestion:
+    source_mode: crawl
+    max_pages: 40
+    max_depth: 3
+    request_delay_seconds: 1.0
+    respect_robots: true
+    interaction_probing: true
+    workflow_extraction: true
+    blocked_control_patterns:
+      - '(?i)\b(submit|send|confirm|continue|next|proceed|place\s*order)\b'
+      - '(?i)\b(buy|purchase|checkout|pay|order|add\s*to\s*cart|subscribe)\b'
+      - '(?i)\b(delete|remove|cancel|unsubscribe|reset)\b'
+      - '(?i)\b(log\s*in|sign\s*in|log\s*out|sign\s*out|register|sign\s*up)\b'
+    browser_backend: playwright
+
+  chunking:
+    strategy: typed
+    size: 400
+    overlap: 50
+    fixed_lines_per_chunk: 3
+    table_handling: header_repeat
+    heading_breadcrumb: true
+    qa_pairing: true
+    min_chunk_chars: 40
+
+  embedding:
+    model: all-MiniLM-L6-v2
+    dimensions: 384
+    normalize: true
+    batch_size: 32
+
+  store:
+    backend: qdrant
+    host: localhost
+    port: 6333
+    collection: sme_chatbot
+    distance: cosine
+    payload_indexes: [domain_id, access_level, document_id, chunk_type]
+    allow_cosine_without_normalize: false
+
+  retrieval:
+    mode: dense
+    top_k: 5
+    candidate_k: 30
+    fusion: rrf
+    rrf_k: 60
+    dense_weight: 0.5
+    reranker_model: null
+    bm25_variant: okapi
+
+  access_control:
+    strategy: prefilter
+    role_map:
+      customer: [public]
+      admin: [public, private]
+    private_url_patterns: [/admin, /staff, /dashboard, /internal, /portal]
+    default_level: public
+    fail_closed: true
+
+  generation:
+    # Provisional pending OD-3 (docs/08); free to change before the first generation
+    # sweep exists (CLAUDE.md rule 8).
+    model: llama3.2
+    base_url: http://localhost:11434/v1
+    adapter: null
+    prompt_variant: strict_grounded
+    temperature: 0.0
+    max_tokens: 512
+    history_turns: 8
+    # ASCII-only: abstention detection is exact-substring (docs/03 §2.7).
+    abstention_phrase: I do not have that information. Please contact us directly.
+
+  evaluation:
+    metrics: [precision_at_k, recall_at_k, mrr, hit_rate, latency_ms]
+    ragas_enabled: false
+    relevance_granularity: page
+    paired_test: wilcoxon
