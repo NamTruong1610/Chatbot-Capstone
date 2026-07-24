@@ -21,6 +21,20 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 | FR-CFG-07 | `python -m app.config diff <a> <b>` prints only the differing keys — the experimental manipulation, made explicit. | S | Write-up |
 | FR-CFG-08 | Loading a config whose `extends` chain contains a cycle raises. | S | Robustness |
 
+## FR-STORE — Vector store
+
+*Qdrant with cosine distance. Decided in `docs/08` OD-1; not an experimental variable.*
+
+| ID | Requirement | Pri | Trace |
+|---|---|---|---|
+| FR-STORE-01 | The vector store is accessed through one adapter module. No other module imports the Qdrant client directly. | M | `docs/04` §6 |
+| FR-STORE-02 | The collection is created on startup if absent, with the dimensions implied by `embedding.model` and `store.distance`. | M | Setup |
+| FR-STORE-03 | Payload indexes are created on `domain_id`, `access_level`, `document_id`, `chunk_type` at startup. Their absence must not be silent — log the creation or the confirmation that they exist. | M | FR-RET-08, RQ2 |
+| FR-STORE-04 | Filtered search passes `domain_id` and permitted `access_level` values as a server-side payload filter on the same call as the vector query. Filtering after the fact is `postfilter` (FR-ACL-04) and must not be used to implement `prefilter`. | M | RQ2 |
+| FR-STORE-05 | A stored vector's dimension count is validated against `embedding.dimensions` at upsert. A mismatch raises rather than writing. | M | FR-RET-10 |
+| FR-STORE-06 | `embedding.normalize: false` combined with `store.distance: cosine` raises at config load unless an explicit acknowledgement flag is set. The L2/cosine equivalence relied on elsewhere assumes normalised vectors. | S | Correctness |
+| FR-STORE-07 | Upserts are batched. A crawl producing several thousand chunks must not issue one request per chunk, nor one request for all of them. | S | Reliability |
+
 ## FR-CRAWL — Autonomous site ingestion
 
 | ID | Requirement | Pri | Trace |
@@ -76,7 +90,7 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 | FR-RET-07 | Every retrieved chunk returns: id, text, full metadata, fused score, rank in each arm that found it, rerank score if applicable. | M | Analysis |
 | FR-RET-08 | Retrieval reports wall-clock latency per query. Latency is a first-class SME result, not a footnote. | M | RQ1, contribution |
 | FR-RET-09 | The sparse index is per-`domain_id`, cached, and invalidated on any write to that domain. | M | Correctness |
-| FR-RET-10 | `embedding.model` is configurable. Changing it requires re-indexing; the system must detect a dimension mismatch and refuse to query rather than return garbage. | M | RQ4 |
+| FR-RET-10 | `embedding.model` is configurable. Changing it requires re-indexing; the system must detect a dimension mismatch and refuse to query rather than return garbage (FR-STORE-05). | M | RQ4 |
 
 ## FR-ACL — Access control
 
@@ -84,7 +98,7 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 |---|---|---|---|
 | FR-ACL-01 | Every chunk carries `access_level ∈ {public, private}`, assigned at ingest. | M | RQ2 |
 | FR-ACL-02 | Assignment sources, in precedence order: explicit per-document override → URL pattern rules from config → default `public`. Record which rule fired. | M | RQ2 |
-| FR-ACL-03 | `access_control.strategy: prefilter` — filter by permitted levels **before** scoring, on both retrieval arms. | M | RQ2 |
+| FR-ACL-03 | `access_control.strategy: prefilter` — filter by permitted levels **before** scoring, on both retrieval arms. Dense arm: server-side payload filter (FR-STORE-04). Sparse arm: mask disallowed documents before ranking, so the top-*n* is the top-*n* of what the role may see. | M | RQ2 |
 | FR-ACL-04 | `access_control.strategy: postfilter` — retrieve unfiltered, then drop impermissible chunks. Present as an experimental arm for comparison against ARBITER-style approaches (Lorenzo et al., 2025). | M | RQ2 |
 | FR-ACL-05 | `access_control.strategy: none` — no filtering. Control condition establishing the leakage ceiling. **Must be impossible to select outside the evaluation harness.** | M | RQ2, safety |
 | FR-ACL-06 | Role→levels mapping is config-driven, not hardcoded. Default: `customer → {public}`, `admin → {public, private}`. | M | RQ2 |

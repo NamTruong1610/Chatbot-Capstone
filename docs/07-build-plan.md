@@ -38,7 +38,7 @@ Runs alongside the proposal's "Setup and Data Collection".
 | P0-4 | ☐ Config hashing | FR-CFG-04 | Key reordering does not change the hash |
 | P0-5 | ☐ `show` / `diff` / `validate` CLI | FR-CFG-06/07 | `diff C0 C2` prints only `retrieval.mode` and `reranker_model` |
 | P0-6 | ☐ Write `C0-baseline.yaml` | — | Validates; hash is stable |
-| P0-7 | ☐ Store adapters: vector, Redis, Postgres + payload indexes | FR-RET-09 | `make services` up, health check green |
+| P0-7 | ☐ Store adapters: Qdrant, Redis, Postgres + payload indexes | FR-STORE-01→07 | `make services` up; collection auto-created; all four payload indexes confirmed in logs; a filtered query on an empty collection returns cleanly |
 | P0-8 | ☐ Strategy registries and protocols | `docs/04` §3 | A dummy chunker registers and is selectable by config |
 
 **Gate:** a config file selects a no-op strategy end to end. No pipeline logic yet.

@@ -74,7 +74,35 @@ held constant unless you deliberately open them up.
 | `normalize` | bool | true | — |
 | `batch_size` | int | 32 | — |
 
-### 2.4 `retrieval`
+### 2.4 `store`
+
+Qdrant, cosine distance (`docs/08` OD-1). Held constant across every configuration —
+the store is infrastructure, not an experimental variable.
+
+| Key | Type | Default | Arms |
+|---|---|---|---|
+| `backend` | enum | `qdrant` | — |
+| `host` / `port` | str / int | `localhost` / 6333 | — |
+| `collection` | str | `sme_chatbot` | — |
+| `distance` | enum | `cosine` | — |
+| `payload_indexes` | list | `[domain_id, access_level, document_id, chunk_type]` | — |
+
+**Why cosine and not L2.** `all-MiniLM-L6-v2` emits normalised vectors, for which L2 and
+cosine rankings are equivalent — the nearest chunk by L2 is the highest-scoring chunk by
+cosine. The metric is therefore not a meaningful experimental dimension here, and cosine
+is chosen because it is Qdrant's idiomatic default and because similarity scores in
+`[0, 1]` are directly readable in retrieval telemetry, where L2 distances are not.
+
+If `embedding.normalize` is ever set false, this equivalence breaks and the distance
+metric becomes a real choice. The config loader raises if `normalize: false` is combined
+with `distance: cosine` without an explicit acknowledgement flag.
+
+**Payload indexes are not optional.** Every query filters on `domain_id` and
+`access_level`. Without payload indexes Qdrant scans the whole collection per query,
+which makes `latency_ms` — a reported RQ1 result (`docs/03` §4.4) — measure index
+absence rather than retrieval architecture.
+
+### 2.5 `retrieval`
 
 | Key | Type | Default | Arms |
 |---|---|---|---|
@@ -87,7 +115,7 @@ held constant unless you deliberately open them up.
 | `reranker_model` | str | null | — |
 | `bm25_variant` | enum | `okapi` | `okapi` · `plus` |
 
-### 2.5 `access_control`
+### 2.6 `access_control`
 
 | Key | Type | Default | Arms |
 |---|---|---|---|
@@ -97,7 +125,7 @@ held constant unless you deliberately open them up.
 | `default_level` | enum | `public` | — |
 | `fail_closed` | bool | true | **must stay true outside the harness** |
 
-### 2.6 `generation`
+### 2.7 `generation`
 
 | Key | Type | Default | Arms |
 |---|---|---|---|
@@ -110,7 +138,7 @@ held constant unless you deliberately open them up.
 | `history_turns` | int | 8 | — |
 | `abstention_phrase` | str | *(configured)* | — |
 
-### 2.7 `evaluation`
+### 2.8 `evaluation`
 
 | Key | Type | Default |
 |---|---|---|
@@ -207,6 +235,16 @@ on indexed metadata before scoring trades that residual risk for a dependency on
 labelling at ingest — the hard problem moves from retrieval to ingestion. `C11` and `C12`
 make that trade measurable rather than merely asserted. This is the strongest
 contribution claim available for RQ2.
+
+The guarantee is only structural if the filter is applied **inside** the search, not
+around it. Under `prefilter`, the permitted `access_level` set is passed to Qdrant as a
+payload filter on the same call that does the vector search, so an impermissible chunk is
+never scored and never enters the candidate set. Retrieving `candidate_k` chunks and then
+discarding the private ones is a different mechanism with a different failure mode — it
+is what `C11-acl-postfilter` implements, and the distinction is the whole point of the
+comparison. The BM25 arm has no server-side equivalent, so it masks disallowed documents
+before ranking rather than after, which preserves the same property: the top-*n* is the
+top-*n* of what this role can see, not the top-*n* overall with holes in it.
 
 ### 4.4 Latency is a result, not an implementation note
 

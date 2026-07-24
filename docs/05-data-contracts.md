@@ -51,8 +51,11 @@ at ingest → raise (FR-CHUNK-05).
 }
 ```
 
-**Indexed fields** (payload indexes required, or every filtered query scans the
-collection): `domain_id`, `access_level`, `document_id`, `chunk_type`.
+**Indexed fields.** `domain_id`, `access_level`, `document_id`, `chunk_type` each
+require a Qdrant payload index (`PayloadSchemaType.KEYWORD`), created at startup
+(FR-STORE-03). Without them every filtered query scans the collection, and since
+`latency_ms` is a reported RQ1 result, an unindexed run measures the missing index rather
+than the retrieval architecture.
 
 ---
 

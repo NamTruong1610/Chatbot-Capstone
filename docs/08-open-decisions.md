@@ -11,32 +11,6 @@ which is the worst failure mode available (CLAUDE.md, Working style).
 
 ---
 
-## OD-1 — Vector store: FAISS or Qdrant?
-
-**Status:** ☐ Open · **Decider:** you · **Blocks:** P0-7, and a paragraph of the proposal
-
-The proposal's methodology commits to FAISS, then spends a paragraph deriving that FAISS
-ranks by L2, that all-MiniLM-L6-v2 produces normalised vectors, and that L2 and cosine
-therefore give equivalent rankings. Your existing prototype uses Qdrant with
-`Distance.COSINE`.
-
-| | FAISS | Qdrant |
-|---|---|---|
-| Metadata filtering | Manual, alongside the index | Native, server-side |
-| Role pre-filtering (RQ2) | You build it | Built in |
-| Matches the proposal | Yes | No |
-| Already working in your code | No | Yes |
-
-**Recommendation: Qdrant.** RQ2 requires filtered retrieval on `domain_id` and
-`access_level` across two retrieval arms. Doing that over FAISS means hand-rolling
-metadata filtering, which is project work that produces no findings.
-
-**If you take this:** the L2/cosine derivation in the methodology becomes moot and must
-be cut or rewritten as a justification of cosine distance. Do not leave it in — a marker
-will read it against the code.
-
----
-
 ## OD-2 — LangChain as orchestration framework?
 
 **Status:** ☐ Open · **Decider:** you · **Blocks:** P0-1 dependencies
@@ -226,9 +200,44 @@ either way.
 
 ## Decided
 
-*Move entries here with the date and rationale once settled. An empty section now; it
-becomes the audit trail of design decisions for chapter 3.*
+*Move entries here with the date and rationale once settled. This is the audit trail of
+design decisions for chapter 3.*
 
 | ID | Decision | Date | Rationale |
 |---|---|---|---|
-| — | — | — | — |
+| OD-1 | **Qdrant**, `Distance.COSINE`, in place of FAISS | 2026-07-24 | See below |
+
+### OD-1 — Vector store: Qdrant with cosine distance
+
+**Decision.** Qdrant replaces FAISS as the vector store. Distance metric is cosine.
+
+**Rationale, in the order it should appear in the thesis.**
+
+1. **RQ2 requires filtered retrieval.** Every query filters on `domain_id` (tenant
+   isolation) and `access_level` (role scoping), across both the dense and sparse arms.
+   Qdrant applies these as server-side payload filters *before* scoring, which is what
+   makes `prefilter` a structural guarantee rather than a post-hoc check. Over FAISS the
+   same behaviour has to be hand-built alongside the index, which is engineering effort
+   that produces no findings.
+2. **The switch costs nothing at the ranking level.** `all-MiniLM-L6-v2` emits normalised
+   vectors. For normalised vectors, ranking by L2 distance and ranking by cosine
+   similarity are equivalent — the nearest chunk by L2 is the highest-scoring chunk by
+   cosine. So moving from FAISS/L2 to Qdrant/cosine cannot change which chunks are
+   retrieved, and the Appendix A preliminary results remain comparable with the main
+   study.
+
+**Note the direction of that second point.** The equivalence is not the *reason* for
+choosing Qdrant — it is what makes the choice free. Written the other way round
+("we chose Qdrant because L2 and cosine are equivalent") it is a non-sequitur, since the
+equivalence holds regardless of which store you pick. Metadata filtering is the reason;
+the equivalence is the reassurance that the reason costs nothing.
+
+**Follow-up actions**
+
+- [ ] Amend the proposal methodology: the L2 derivation paragraph is now redundant as
+      written. Replacement draft supplied separately — it keeps the normalisation
+      argument, but repurposes it to justify the store change rather than to justify
+      FAISS.
+- [ ] Appendix A stays as written. It is an accurate record of a preliminary exercise
+      that did use FAISS; note in chapter 3 that the main study moved to Qdrant and why.
+- [x] `docs/02`, `docs/03`, `docs/04`, `docs/05`, `docs/07` updated.

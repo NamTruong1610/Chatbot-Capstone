@@ -68,6 +68,14 @@ strongest piece of local evidence the project has, and it means chunking strateg
 be an experimental arm, not a constant. Any configuration matrix that holds chunking
 fixed cannot explain the one failure the project has already observed.
 
+**On comparability.** Appendix A used FAISS with L2 distance; the main study uses Qdrant
+with cosine (`docs/08` OD-1). This does not break the comparison. `all-MiniLM-L6-v2`
+emits normalised vectors, and for normalised vectors L2 and cosine produce identical
+rankings — so `C5-chunk-fixed` reproduces the Appendix A retrieval condition faithfully
+despite the store change. The raw distance *values* in Appendix A are not comparable with
+cosine similarity scores reported later; the rankings are. Say so once in chapter 3 and
+do not report the two number ranges side by side.
+
 ## 6. Statistical reality — read this before designing experiments
 
 With 30–50 questions per domain, this study can detect large effects, not small ones.

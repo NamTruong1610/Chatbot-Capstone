@@ -12,7 +12,8 @@ Read in order on first pass. After that, `CLAUDE.md` routes you to the right doc
 | [`05-data-contracts.md`](05-data-contracts.md) | Chunk payload, test set CSV, results schemas, API bodies |
 | [`06-evaluation-protocol.md`](06-evaluation-protocol.md) | Metric definitions, scoring rules, statistical procedure |
 | [`07-build-plan.md`](07-build-plan.md) | 13-week phased plan, acceptance criteria, compute budget, risks |
-| [`08-open-decisions.md`](08-open-decisions.md) | Unresolved choices. **Read before assuming anything.** |
+| [`08-open-decisions.md`](08-open-decisions.md) | Unresolved choices, plus the Decided audit trail. **Read before assuming anything.** |
+| [`proposal-amendment-OD1.md`](proposal-amendment-OD1.md) | Replacement text for the proposal's methodology section following the Qdrant decision |
 
 ## The one-paragraph version
 

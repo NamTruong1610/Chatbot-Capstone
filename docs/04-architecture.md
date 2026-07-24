@@ -80,7 +80,8 @@ the repo, because it is what keeps the configuration matrix honest: a reader of
 │   │   └── service.py             # context assembly, citation, abstention
 │   │
 │   ├── store/
-│   │   ├── vector.py              # vector DB adapter
+│   │   ├── vector.py              # Qdrant adapter — the ONLY module that
+│   │   │                          #   imports qdrant_client (FR-STORE-01)
 │   │   ├── session.py             # Redis
 │   │   └── summary.py             # Postgres
 │   │
@@ -191,8 +192,11 @@ question + domain_id + role
 AccessStrategy.levels_for(role)
   ↓
 Retriever (RETRIEVERS[retrieval.mode])
-  ├ dense arm   (filtered if strategy.prefilter())
-  ├ sparse arm  (filtered if strategy.prefilter())
+  ├ dense arm   → Qdrant query_points(vector, filter=domain_id + access_level)
+  │                the filter rides along with the search; impermissible chunks
+  │                are never scored          [if strategy.prefilter()]
+  ├ sparse arm  → BM25 over the domain corpus, disallowed docs masked before
+  │                ranking, not after        [if strategy.prefilter()]
   ├ fusion      (rrf | weighted)
   └ rerank      (if mode == hybrid_rerank)
   ↓
