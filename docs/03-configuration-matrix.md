@@ -28,7 +28,7 @@ Rules:
   baseline and editing it, you are doing it wrong — that hides the manipulation.
 - `rq:` lists which research questions the config serves. The sweep runner uses it.
 - The resolved config is hashed (FR-CFG-04). Results carry the hash.
-- `python -m app.config diff C0-baseline C2-hybrid-rerank` prints exactly the
+- `python -m chatbot.config diff C0-baseline C2-hybrid-rerank` prints exactly the
   manipulation. That output goes in the thesis methodology chapter verbatim.
 
 ---
@@ -129,14 +129,27 @@ absence rather than retrieval architecture.
 
 | Key | Type | Default | Arms |
 |---|---|---|---|
-| **`model`** | str | *see `docs/08` OD-3* | base · fine-tuned |
-| `base_url` | str | Ollama endpoint | — |
+| **`model`** | str | `llama3.2` *(provisional — OD-3)* | base · fine-tuned |
+| `base_url` | str | `http://localhost:11434/v1` | — |
 | **`adapter`** | str | null | null · QLoRA adapter path |
 | **`prompt_variant`** | enum | `strict_grounded` | `strict_grounded` · `permissive` |
 | `temperature` | float | 0.0 | — |
 | `max_tokens` | int | 512 | — |
 | `history_turns` | int | 8 | — |
-| `abstention_phrase` | str | *(configured)* | — |
+| `abstention_phrase` | str | `I do not have that information. Please contact us directly.` | — |
+
+**`model` is provisional.** OD-3 (3B vs 7B) is unresolved, and the baseline needs a value
+that validates today. `llama3.2` is the development default. Resolving OD-3 before Phase 5
+costs nothing — no generation results exist until P5-8, and retrieval metrics (RQ1, RQ2,
+RQ4) do not depend on the generator at all. See CLAUDE.md rule 8 on when the baseline
+actually freezes.
+
+**`abstention_phrase` is deliberately ASCII-only.** Detection is exact-substring
+(`docs/06` §3), so an apostrophe or em-dash in the phrase makes matching hostage to how
+the model renders Unicode punctuation — `don't` versus `don't` would silently score a
+correct abstention as a failure. "do not" avoids the apostrophe; the full stop avoids the
+dash. If you change the phrase, keep it free of characters that have a smart-quote
+variant.
 
 ### 2.8 `evaluation`
 
@@ -269,6 +282,6 @@ which would be a more useful contribution than confirming that reranking helps.
 2. Change **one** thing. If you need two, that is two configs, or say explicitly in the
    description why they are inseparable.
 3. Add it to the relevant list in `configs/sweeps/rq<N>.yaml`.
-4. Run `python -m app.config diff C0-baseline <ID>` and paste the output into the
+4. Run `python -m chatbot.config diff C0-baseline <ID>` and paste the output into the
    description. If the diff surprises you, the merge is wrong.
 5. Add a row to §3 above in the same commit.

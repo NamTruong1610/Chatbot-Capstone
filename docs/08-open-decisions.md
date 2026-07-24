@@ -11,24 +11,6 @@ which is the worst failure mode available (CLAUDE.md, Working style).
 
 ---
 
-## OD-2 — LangChain as orchestration framework?
-
-**Status:** ☐ Open · **Decider:** you · **Blocks:** P0-1 dependencies
-
-The proposal states the pipeline "will be implemented in Python using LangChain as the
-orchestration framework". This spec uses only `langchain_text_splitters`, inside the
-`recursive` chunker.
-
-**Recommendation: direct SDK calls, keep the text splitter.** Orchestration frameworks
-abstract over exactly the parameters this project must vary and report. When RQ1 asks
-"what did reranking cost in latency", you need the call sites, not a chain.
-
-**If you take this:** amend the methodology to "Python, with LangChain text splitters
-for the recursive chunking baseline". One sentence. Do not leave the stronger claim
-standing.
-
----
-
 ## OD-3 — Generator model
 
 **Status:** ☐ Open · **Decider:** supervisor · **Blocks:** P3-8, P5-7, the RQ3 design
@@ -48,6 +30,11 @@ Three positions in play: the proposal says Mistral-7B or Llama 3 8B; your protot
 config so this is a one-line change (FR-GEN-01). But decide *before* Phase 5 — a fine-tune
 on the wrong base model is a week you cannot get back, and RQ3's whole framing is
 "is this worth it for an SME on consumer hardware", which is a claim about the 7B case.
+
+**Interim state.** `C0-baseline.yaml` carries `generation.model: llama3.2` so it validates
+today. This is provisional, not a decision. Changing it before P5-8 is free — no
+generation results exist until then, and no retrieval metric depends on the generator
+(CLAUDE.md rule 8). Changing it after costs a re-run of every generation sweep.
 
 ---
 
@@ -206,6 +193,8 @@ design decisions for chapter 3.*
 | ID | Decision | Date | Rationale |
 |---|---|---|---|
 | OD-1 | **Qdrant**, `Distance.COSINE`, in place of FAISS | 2026-07-24 | See below |
+| OD-2 | **Direct SDK calls**; `langchain-text-splitters` only, inside the `recursive` chunker | 2026-07-24 | See below |
+| OD-11 | Package is **`chatbot`**, not `app`. CLI is `python -m chatbot.config` | 2026-07-24 | Raised during P0 planning; `app` collides with the FastAPI `app = FastAPI()` convention and reads as a placeholder. `docs/02` and `docs/03` corrected. |
 
 ### OD-1 — Vector store: Qdrant with cosine distance
 
@@ -241,3 +230,21 @@ the equivalence is the reassurance that the reason costs nothing.
 - [ ] Appendix A stays as written. It is an accurate record of a preliminary exercise
       that did use FAISS; note in chapter 3 that the main study moved to Qdrant and why.
 - [x] `docs/02`, `docs/03`, `docs/04`, `docs/05`, `docs/07` updated.
+
+### OD-2 — Orchestration: direct SDK calls
+
+**Decision.** No orchestration framework. `langchain-text-splitters` is used, and only
+inside `ingestion/chunking/recursive.py`.
+
+**Rationale.** Orchestration frameworks abstract over precisely the parameters this study
+must vary and report. RQ1 asks what reranking costs in latency; answering that needs the
+call sites, not a chain that hides them. The framework would also sit between the config
+system and the pipeline, which is the one seam that has to stay explicit for the
+configuration matrix to mean anything.
+
+**Follow-up**
+
+- [ ] Amend the proposal methodology. Current text: *"implemented in Python using
+      LangChain as the orchestration framework"*. Replace with: *"implemented in Python,
+      using LangChain text splitters for the recursive chunking baseline"*. One sentence;
+      do not leave the stronger claim standing.

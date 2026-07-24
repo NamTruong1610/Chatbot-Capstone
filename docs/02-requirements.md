@@ -17,8 +17,8 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 | FR-CFG-03 | Configs are validated against a typed schema on load. Unknown keys, missing required keys, and out-of-range values raise at load time, not at use time. | M | Rule 2 |
 | FR-CFG-04 | Every config resolves to a deterministic `config_hash` (stable hash of the fully-merged dict). Reordering keys must not change the hash. | M | Reproducibility |
 | FR-CFG-05 | The resolved config is injected into every component. No component reads a global or an env var for a pipeline parameter. | M | Rule 1 |
-| FR-CFG-06 | `python -m app.config show <config_id>` prints the fully resolved config and its hash. | S | Debugging |
-| FR-CFG-07 | `python -m app.config diff <a> <b>` prints only the differing keys — the experimental manipulation, made explicit. | S | Write-up |
+| FR-CFG-06 | `python -m chatbot.config show <config_id>` prints the fully resolved config and its hash. | S | Debugging |
+| FR-CFG-07 | `python -m chatbot.config diff <a> <b>` prints only the differing keys — the experimental manipulation, made explicit. | S | Write-up |
 | FR-CFG-08 | Loading a config whose `extends` chain contains a cycle raises. | S | Robustness |
 
 ## FR-STORE — Vector store

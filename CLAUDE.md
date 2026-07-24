@@ -80,6 +80,13 @@ These are not style preferences. Breaking them invalidates experimental results.
    every comparison already run. If it must change, that is an open decision, and all
    affected results are re-run.
 
+   **The rule binds from the first recorded result, not from file creation.** Before any
+   run exists in `results/`, editing the baseline is free — nothing has been measured
+   against it yet. After the first result, any change is an open decision plus a re-run.
+   So a value left provisional in Phase 0 (see `docs/08` OD-3) can still be settled
+   cheaply, provided it is settled before the sweep that depends on it. Check `results/`
+   before assuming a change is costly, and record the change in `docs/08` either way.
+
 ## Commands
 
 ```bash
