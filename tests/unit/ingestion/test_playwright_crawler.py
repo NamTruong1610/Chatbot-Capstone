@@ -7,18 +7,17 @@ forces the unavailable path, so it needs no browser.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
-import json
 
 import chatbot.ingestion.crawler.playwright as pw
-from chatbot.config.schema import BrowserBackend, IngestionConfig, ResolvedConfig
 from chatbot.config.loader import load_config
+from chatbot.config.schema import BrowserBackend, IngestionConfig, ResolvedConfig
 from chatbot.ingestion.crawler import StaticCrawler, build_crawler
 from chatbot.ingestion.crawler.playwright import PlaywrightCrawler, playwright_available
 from chatbot.ingestion.crawler.static import FetchResult
-
 
 SITE_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "site"
 JS_FIXTURE = SITE_DIR / "js-injected.html"
