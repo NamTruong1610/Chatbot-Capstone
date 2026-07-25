@@ -27,7 +27,14 @@ Rules:
 - A config file states **only what it changes**. If you find yourself copying the
   baseline and editing it, you are doing it wrong — that hides the manipulation.
 - `rq:` lists which research questions the config serves. The sweep runner uses it.
-- The resolved config is hashed (FR-CFG-04). Results carry the hash.
+- The resolved config is hashed (FR-CFG-04). Results carry the hash. **The hash is
+  computed over the resolved parameter tree only** — the eight sections (`ingestion`,
+  `chunking`, `embedding`, `store`, `retrieval`, `access_control`, `generation`,
+  `evaluation`). The identifying metadata (`id`, `description`, `rq`) is deliberately
+  excluded. Two consequences follow: editing a config's description or `rq` does **not**
+  change its hash, so it cannot invalidate results already stamped with that hash; and two
+  configs whose parameters resolve identically produce the **same** hash — which is the
+  intended duplicate-arm check, surfacing an accidental copy that measures nothing new.
 - `python -m chatbot.config diff C0-baseline C2-hybrid-rerank` prints exactly the
   manipulation. That output goes in the thesis methodology chapter verbatim.
 
@@ -86,6 +93,7 @@ the store is infrastructure, not an experimental variable.
 | `collection` | str | `sme_chatbot` | — |
 | `distance` | enum | `cosine` | — |
 | `payload_indexes` | list | `[domain_id, access_level, document_id, chunk_type]` | — |
+| `allow_cosine_without_normalize` | bool | false | — |
 
 **Why cosine and not L2.** `all-MiniLM-L6-v2` emits normalised vectors, for which L2 and
 cosine rankings are equivalent — the nearest chunk by L2 is the highest-scoring chunk by

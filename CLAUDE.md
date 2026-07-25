@@ -123,3 +123,6 @@ A task is done when all of these hold:
   why RRF and not weighted fusion. Write that down where the decision lives.
 - **Prefer boring.** This runs on one consumer-grade machine with ≤16GB VRAM. Every
   dependency and every clever abstraction is a thing that can break in week 11.
+- **Each build phase lands on its own branch (`feature/phase-N-name`) and merges to main
+  only after the phase's review gate has passed.** `main` is the reviewed trunk, never the
+  working branch.
