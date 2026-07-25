@@ -17,7 +17,9 @@ overrides:
     max_depth: 3
     request_delay_seconds: 1.0
     respect_robots: true
-    interaction_probing: true
+    # OD-5: interaction probing defaults false for live crawls (mirror crawls override to
+    # true). The baseline is the reference config, so it must carry the live-safe default.
+    interaction_probing: false
     workflow_extraction: true
     blocked_control_patterns:
       - '(?i)\b(submit|send|confirm|continue|next|proceed|place\s*order)\b'
