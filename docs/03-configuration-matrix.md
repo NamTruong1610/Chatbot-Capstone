@@ -58,6 +58,7 @@ held constant unless you deliberately open them up.
 | **`workflow_extraction`** | bool | true | `true` · `false` |
 | `blocked_control_patterns` | regex | conservative default | — |
 | `browser_backend` | enum | `playwright` | `playwright` · `static` |
+| `render_wait` | enum | `networkidle` | `load` · `domcontentloaded` · `networkidle` |
 
 ### 2.2 `chunking`
 

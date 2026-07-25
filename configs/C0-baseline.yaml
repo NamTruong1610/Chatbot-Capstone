@@ -25,6 +25,7 @@ overrides:
       - '(?i)\b(delete|remove|cancel|unsubscribe|reset)\b'
       - '(?i)\b(log\s*in|sign\s*in|log\s*out|sign\s*out|register|sign\s*up)\b'
     browser_backend: playwright
+    render_wait: networkidle
 
   chunking:
     strategy: typed

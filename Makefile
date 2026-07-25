@@ -19,6 +19,9 @@ install:
 	$(PYTHON) -m venv $(VENV)
 	$(BIN)/pip install --upgrade pip
 	$(BIN)/pip install -e ".[dev]"
+	# Chromium for the Playwright rendering backend (FR-CRAWL-02). If the browser is
+	# provisioned externally, skip this and point CHATBOT_CHROMIUM_PATH at the binary.
+	$(BIN)/playwright install chromium
 
 lint:
 	$(BIN)/ruff check src tests

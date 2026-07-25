@@ -98,6 +98,9 @@ class StaticCrawler:
     point raises (FR-CRAWL-07), while a disallowed link discovered mid-crawl is skipped so
     it cannot abort the run.
     """
+    
+     # Identity of the backend that actually ran, for the crawl manifest (FR-CRAWL-03/10).
+    backend = "static"
 
     def __init__(self, cfg: IngestionConfig, *, fetcher: Fetcher | None = None) -> None:
         self._cfg = cfg

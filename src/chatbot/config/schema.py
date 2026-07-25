@@ -46,6 +46,14 @@ class SourceMode(enum.StrEnum):
 class BrowserBackend(enum.StrEnum):
     playwright = "playwright"
     static = "static"
+    
+    
+class RenderWait(enum.StrEnum):
+    # Playwright wait_until strategies. `commit` is omitted deliberately: it fires before
+    # content renders, which defeats the point of using the rendering backend at all.
+    load = "load"
+    domcontentloaded = "domcontentloaded"
+    networkidle = "networkidle"
 
 
 class ChunkStrategy(enum.StrEnum):
@@ -142,6 +150,13 @@ class IngestionConfig(_Section):
         default_factory=lambda: list(_DEFAULT_BLOCKED_CONTROL_PATTERNS)
     )
     browser_backend: BrowserBackend = BrowserBackend.playwright
+    
+    # Playwright's wait strategy before the rendered DOM is read (FR-CRAWL-02). A pipeline
+    # parameter: it changes which HTML is captured, so it lives here and rides in the config
+    # hash. `networkidle` renders the most but can settle non-deterministically on sites
+    # with analytics or long-poll widgets; `load`/`domcontentloaded` trade completeness for
+    # reproducibility. The static backend ignores it.
+    render_wait: RenderWait = RenderWait.networkidle
 
     @model_validator(mode="after")
     def _robots_must_stay_true(self) -> IngestionConfig:

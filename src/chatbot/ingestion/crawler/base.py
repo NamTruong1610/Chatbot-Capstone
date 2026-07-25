@@ -14,15 +14,26 @@ mutable state.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol, TypeVar, runtime_checkable
 
 from chatbot.config.schema import IngestionConfig
 
+logger = logging.getLogger(__name__)
+
 
 class CrawlError(Exception):
     """A fault that stops a crawl (e.g. a disallowed entry point). See subclasses."""
+
+
+class BackendUnavailable(CrawlError):
+    """A selected backend cannot run in this environment (e.g. no browser for Playwright).
+
+    Distinct from an *unregistered* backend, which is a config error. This one is a runtime
+    fact of the machine, and it is the trigger for the FR-CRAWL-03 fallback to ``static``.
+    """
 
 
 # --------------------------------------------------------------------------------------
@@ -154,18 +165,31 @@ def register_crawler(name: str) -> Callable[[type[_C]], type[_C]]:
 
 
 def build_crawler(cfg: IngestionConfig) -> Crawler:
-    """Instantiate the backend named by ``cfg.browser_backend``.
+    """Instantiate the backend named by ``cfg.browser_backend``, degrading if it can't run.
 
-    Fails loud on an unregistered backend (CLAUDE.md rule 2) — e.g. ``playwright`` before
-    P1-2 lands — rather than silently falling back to ``static``, which would let a run
-    measure a different ingestion path than the config claims.
+    Fails loud on an *unregistered* backend (CLAUDE.md rule 2) — a config typo must never
+    silently become ``static``. But a *registered* backend that is unavailable at runtime
+    (``BackendUnavailable`` — e.g. Playwright with no browser) degrades to ``static`` per
+    FR-CRAWL-03, loudly: the fallback is logged, because results from different backends are
+    not comparable and the crawl manifest must be able to report which one actually ran.
     """
     backend = cfg.browser_backend.value
     try:
-        cls = CRAWLERS[backend]
+        factory = CRAWLERS[backend]
     except KeyError:
         raise CrawlError(
             f"no crawl backend registered for browser_backend='{backend}'. "
             f"Registered: {sorted(CRAWLERS)}"
         ) from None
-    return cls(cfg)
+    try:
+        return factory(cfg)
+    except BackendUnavailable as exc:
+        if backend == "static":
+            raise  # static is the floor; nothing to fall back to
+        logger.warning(
+            "crawl backend '%s' is unavailable (%s); falling back to 'static'. "
+            "Results from different backends are not comparable (FR-CRAWL-03).",
+            backend,
+            exc,
+        )
+        return CRAWLERS["static"](cfg)
