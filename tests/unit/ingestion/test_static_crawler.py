@@ -87,7 +87,12 @@ def test_registry_builds_the_static_backend() -> None:
     assert isinstance(crawler, StaticCrawler)
 
 
-def test_registry_fails_loud_on_unregistered_backend() -> None:
-    # playwright (P1-2) is not built yet; selecting it must raise, never fall back to static.
+def test_registry_fails_loud_on_unregistered_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An unregistered backend is a config error: fail loud, never silently fall back to
+    # static. (Both backends are now registered — P1-2 added playwright — so simulate an
+    # unregistered one by removing it from the registry for this test.)
+    from chatbot.ingestion.crawler.base import CRAWLERS
+
+    monkeypatch.delitem(CRAWLERS, "playwright")
     with pytest.raises(CrawlError):
         build_crawler(IngestionConfig(browser_backend=BrowserBackend.playwright))

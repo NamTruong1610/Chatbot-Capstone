@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>JS Injected</title></head>
+<body>
+  <main>
+    <h1>Booking</h1>
+    <!-- Empty in the raw HTML; populated by the script below only after the page loads.
+         A static fetch (no JS) sees an empty slot; a rendering fetch sees the content. -->
+    <div id="rendered-slot"></div>
+    <script>
+      document.getElementById('rendered-slot').textContent = 'RENDER_ONLY_BOOKING_STEP';
+    </script>
+  </main>
+</body>
+</html>

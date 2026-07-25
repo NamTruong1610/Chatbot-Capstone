@@ -1,12 +1,13 @@
 """Crawler package: models, protocol, registry, affordance extraction, safety, backends.
 
-Importing the package registers every available backend (currently ``static``), so
-``build_crawler`` can resolve it by config value. Playwright (P1-2) will register here too
-once it exists.
+Importing the package registers every available backend (``static`` and ``playwright``),
+so ``build_crawler`` can resolve either by config value. Importing the playwright backend
+does not require the ``playwright`` dependency — it is loaded lazily on use.
 """
 
 from chatbot.ingestion.crawler.base import (
     CRAWLERS,
+    BackendUnavailable,
     Control,
     CrawledPage,
     Crawler,
@@ -19,11 +20,18 @@ from chatbot.ingestion.crawler.base import (
     build_crawler,
     register_crawler,
 )
+from chatbot.ingestion.crawler.playwright import (
+    PlaywrightCrawler,
+    PlaywrightFetcher,
+    PlaywrightUnavailable,
+    playwright_available,
+)
 from chatbot.ingestion.crawler.safety import RobotsDisallowedError, RobotsPolicy
 from chatbot.ingestion.crawler.static import Fetcher, FetchResult, HttpFetcher, StaticCrawler
 
 __all__ = [
     "CRAWLERS",
+    "BackendUnavailable",
     "Control",
     "CrawlError",
     "CrawledPage",
@@ -35,10 +43,14 @@ __all__ = [
     "Heading",
     "HttpFetcher",
     "Link",
+    "PlaywrightCrawler",
+    "PlaywrightFetcher",
+    "PlaywrightUnavailable",
     "RobotsDisallowedError",
     "RobotsPolicy",
     "StaticCrawler",
     "Table",
     "build_crawler",
+    "playwright_available",
     "register_crawler",
 ]
