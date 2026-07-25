@@ -156,7 +156,7 @@ class IngestionConfig(_Section):
     # hash. `networkidle` renders the most but can settle non-deterministically on sites
     # with analytics or long-poll widgets; `load`/`domcontentloaded` trade completeness for
     # reproducibility. The static backend ignores it.
-    render_wait: RenderWait = RenderWait.networkidle
+    render_wait: RenderWait = RenderWait.domcontentloaded
 
     @model_validator(mode="after")
     def _robots_must_stay_true(self) -> IngestionConfig:
