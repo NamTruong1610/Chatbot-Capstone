@@ -153,9 +153,12 @@ class IngestionConfig(_Section):
     
     # Playwright's wait strategy before the rendered DOM is read (FR-CRAWL-02). A pipeline
     # parameter: it changes which HTML is captured, so it lives here and rides in the config
-    # hash. `networkidle` renders the most but can settle non-deterministically on sites
-    # with analytics or long-poll widgets; `load`/`domcontentloaded` trade completeness for
-    # reproducibility. The static backend ignores it.
+    # hash. Default `domcontentloaded`: it fires deterministically at DOM-parse and cannot
+    # hang. `networkidle` was the earlier default but live-crawl testing (2026-07-25) found
+    # it times out and drops the page on institution-scale sites whose analytics traffic
+    # never lets the network idle (uts.edu.au), while matching domcontentloaded's output
+    # exactly on the study sites — so it costs reproducibility for no content gain here.
+    # The static backend ignores this field.
     render_wait: RenderWait = RenderWait.domcontentloaded
 
     @model_validator(mode="after")
