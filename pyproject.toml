@@ -11,15 +11,12 @@ requires-python = ">=3.11"
 license = { text = "UNLICENSED" }
 authors = [{ name = "Hai Nam Truong" }]
 
-# Runtime dependencies are added phase by phase. Phase 1 (ingestion) adds beautifulsoup4
-# for HTML parsing (affordance extraction) and requests for the static crawler's HTTP
-# transport (docs/04 §2 static.py: "requests + bs4 fallback"). No LangChain — OD-2
-# confines it to the recursive chunker. Playwright is deferred to P1-2.
+# Runtime dependencies are added phase by phase. Phase 0 (the config system) needs
+# only YAML parsing and typed validation — nothing else is built yet, and pulling in
+# ingestion/retrieval/store deps now would lock in choices the config system owns.
 dependencies = [
     "pydantic>=2.6,<3",
     "pyyaml>=6,<7",
-    "beautifulsoup4>=4.12,<5",
-    "requests>=2.31,<3",
 ]
 
 [project.optional-dependencies]
@@ -28,7 +25,6 @@ dev = [
     "ruff>=0.5,<1",
     "mypy>=1.10,<2",
     "types-PyYAML>=6,<7",
-    "types-requests>=2.31,<3",
 ]
 
 [project.scripts]
@@ -54,9 +50,7 @@ mypy_path = "src"
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-# bs4 ships no py.typed; yaml's stubs are not installed. Both are used behind our own
-# typed wrappers, so silence the missing-import error without loosening our code.
-module = ["yaml", "bs4"]
+module = ["yaml"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
