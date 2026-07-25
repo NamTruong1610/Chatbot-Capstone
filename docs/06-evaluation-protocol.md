@@ -20,6 +20,14 @@ Matching is normalised (lowercase, trailing slash stripped) and accepts substrin
 containment in either direction, so `page_1.txt` matches a full URL ending in that
 identifier.
 
+**Exception — bare-domain gold.** A `source_page` that is only a site root (path `/` or
+empty, e.g. `https://x.test/`) normalises to the bare domain, which is a substring of
+*every* page URL on that site. Substring matching would therefore score every retrieved
+chunk as relevant. A root-only gold must match the site root **exactly**; the substring
+rule applies only to entries with a real path. The real `evaluation/metrics.py` inherits
+this rule — it is implemented and tested in the spike matcher (`chatbot/spike/metrics.py`,
+`_is_domain_root`).
+
 **Limitation to state in chapter 5:** page-level relevance cannot distinguish "retrieved
 the right page, wrong section" from "retrieved the right section". It therefore
 *understates* the value of any technique that improves within-page precision — which
