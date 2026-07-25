@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Application Form</title></head>
+<body>
+  <main>
+    <h1>Apply</h1>
+    <form action="/apply" method="post">
+      <label for="applicant">Applicant name</label>
+      <input type="text" id="applicant" name="applicant" required>
+
+      <!-- non-submit, JS-driven control: a real workflow step, not the submit -->
+      <button type="button">Check eligibility</button>
+
+      <button type="submit">Apply</button>
+    </form>
+  </main>
+</body>
+</html>
