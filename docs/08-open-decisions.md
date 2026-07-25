@@ -64,57 +64,6 @@ confirming reranking helps, which Hu et al. (2026) already showed.
 
 ---
 
-## OD-5 — Ethics of interactive crawling
-
-**Status:** ☐ **Open — highest priority** · **Decider:** supervisor · **Blocks:** P1-5
-
-Your ethics section states the research uses "publicly available web content" with "no
-human participants". True for passive scraping. Weaker once the crawler is **submitting
-clicks to a live commercial system** — that is interaction with a third party's
-production infrastructure, not observation of published content.
-
-`blocked_control_patterns` is a blocklist. Blocklists leak. A button labelled "Continue"
-on step 3 of a booking flow matches nothing in the pattern set.
-
-**Required before any live interactive crawl:**
-
-1. Written permission from both businesses, naming interactive crawling specifically
-2. First runs against a local copy or staging environment you control
-3. Ethics section amended to describe interaction, not just retrieval
-4. `controls_blocked` in the manifest retained as the audit trail (`docs/05` §4)
-
-**If permission is not obtainable:** set `interaction_probing: false` as the default,
-and `C10` becomes a headline finding — *what passive crawling misses* — rather than an
-ablation. That is a perfectly good outcome and costs the project nothing.
-
-**Do not implement P1-5 against a live third-party site before this is settled.**
-
----
-
-## OD-6 — Which two SME domains?
-
-**Status:** ☐ Open · **Decider:** you + supervisor · **Blocks:** P5-2, test set construction
-
-The proposal requires two SMEs from distinct industries, with scraping permitted. Your
-supervisor's earlier note references "Tony and Stephanie's workflows" — are those the
-two candidates?
-
-**Selection criteria, in priority order:**
-
-1. Scraping permitted (`robots.txt` plus written permission — see OD-5)
-2. **Genuinely different content structure**, not just different industry. RQ4 tests
-   generalisation across *content shape*: document length, vocabulary, information
-   density, question type. Two service businesses with near-identical brochure sites
-   would make RQ4 unanswerable regardless of industry labels.
-3. Contains at least one real multi-step workflow (booking, application, enrolment) —
-   otherwise the supervisor's entire direction has nothing to extract
-4. Contains tabular content — otherwise `C7` has no signal
-5. Has plausible public/private content division — otherwise RQ2 is synthetic
-
-**Decide by end of W1.** Everything downstream is blocked on the corpus.
-
----
-
 ## OD-7 — Is embedding model an experimental arm?
 
 **Status:** ☐ Open · **Decider:** you · **Blocks:** P5-2 compute budget
@@ -195,6 +144,8 @@ design decisions for chapter 3.*
 | OD-1 | **Qdrant**, `Distance.COSINE`, in place of FAISS | 2026-07-24 | See below |
 | OD-2 | **Direct SDK calls**; `langchain-text-splitters` only, inside the `recursive` chunker | 2026-07-24 | See below |
 | OD-11 | Package is **`chatbot`**, not `app`. CLI is `python -m chatbot.config` | 2026-07-24 | Raised during P0 planning; `app` collides with the FastAPI `app = FastAPI()` convention and reads as a placeholder. `docs/02` and `docs/03` corrected. |
+| OD-5 | Passive crawl needs no permission; interactive probing **enabled**, default target a **local mirror**; live probing allowed but deliberate | 2026-07-25 | See below |
+| OD-6 | **Austral Manufacturing** (`austral-mfg`) + **Wyatt Education Group** (`wyatt-edu`) | 2026-07-25 | See below |
 
 ### OD-1 — Vector store: Qdrant with cosine distance
 
@@ -248,3 +199,93 @@ configuration matrix to mean anything.
       LangChain as the orchestration framework"*. Replace with: *"implemented in Python,
       using LangChain text splitters for the recursive chunking baseline"*. One sentence;
       do not leave the stronger claim standing.
+
+### OD-5 — Crawl ethics: passive vs. interactive
+
+**Decision.** The permission question was reframed after distinguishing two operations the
+earlier draft had conflated.
+
+- **Passive crawling** (P1-1, P1-4 — already built) fetches a page over HTTP and parses the
+  HTML that was already sent. This is what a browser does and what any scraper does; it
+  needs no permission beyond honouring `robots.txt`, which the crawler does. This covers
+  the large majority of the data pipeline and is unblocked.
+- **Interactive probing** (P1-5) clicks controls to reveal JS-injected content. Clicking
+  *issues an action* against a server rather than reading a response, so it is treated with
+  more care — but the care is scoped to P1-5 alone, not to the whole crawler.
+
+**Resolution.**
+
+1. Interactive probing is **enabled** as a capability; P1-5 gets built.
+2. Default target is a **local mirror** of the chosen sites (`wget --mirror`, served on
+   localhost). Against a mirror the `blocked_control_patterns` blocklist's leakiness is
+   harmless — there is no live server to affect — and runs are more reproducible because
+   the site cannot change mid-study. This aligns with FR-CRAWL-09 (persist raw corpus
+   before processing).
+3. Live-site probing is **allowed but deliberate**: `request_delay` enforced, blocklist on,
+   and the `controls_blocked` manifest reviewed after the first run against each site to
+   confirm nothing transactional got through.
+4. `interaction_probing` therefore defaults to **false for live crawls** and is turned on
+   for mirror crawls.
+
+**Why not "written permission from each business", as first drafted.** Passive scraping of
+published pages does not require it, and interactive probing against a local mirror does
+not touch the business's infrastructure at all. Permission-seeking was solving a problem
+the mirror approach dissolves. The residual live-probing path is governed by rate-limiting
+and the blocklist, not by consent.
+
+**Open sub-question, deferred to site inspection, not blocking.** Whether the two chosen
+sites have workflow steps that only render after a *server round-trip* (a button that
+fetches live data, a step-2 form generated server-side). A static mirror cannot capture
+those. If a target workflow has that shape, that specific workflow may need live probing;
+most affordance structure (forms, buttons, their labels and targets) is in the mirrored
+HTML/JS and does not. Check once the sites are mirrored.
+
+### OD-6 — The two SME domains
+
+**Decision.** **Austral Manufacturing** (`austral-mfg`, https://australmanufacturing.com.au/)
+and **Wyatt Education Group** (`wyatt-edu`, https://wyatt.nsw.edu.au/).
+
+**Both are genuine SMEs** — a Penrith metal-fabrication shop and a Bankstown registered
+training organisation — which keeps the study aligned with its SME framing. Earlier
+candidates (IMDb, Reddit) were rejected as large non-SME platforms that also prohibit
+scraping and lack extractable workflows. Brand Furniture was rejected as a five-page
+Squarespace portfolio with no workflow and thin, image-heavy text.
+
+**They satisfy the selection criteria:**
+
+| Criterion | Austral | Wyatt |
+|---|---|---|
+| Genuine SME | ✓ metal fabrication | ✓ vocational RTO |
+| Real multi-step workflow | ✓ Free Quote flow | ✓ Enrolment, Apply, RPL assessment |
+| Tabular content | ✓ (check Capabilities/coating spec tables) | ✓ course catalogue: code, CRICOS, duration, location, mode |
+| `qa` content | ✓ FAQ page | ✓ FAQ page |
+| **Different content shape (RQ4)** | brochure + single conversion form | structured catalogue + application pipeline + policy/compliance pages |
+| Crawler backend exercised | WordPress/Elementor, mostly server-rendered | GTM + dynamic widgets, exercises Playwright (P1-2) |
+
+**The content-shape contrast is the RQ4 justification.** Two manufacturers would have been
+near-neighbours; a fabrication shop and a vocational college have genuinely different
+information architectures — one a brochure with a quote form, the other an enumerable
+course catalogue with a multi-step enrolment pipeline. RQ4 tests generalisation across
+content structure, and this pair provides it. As an incidental benefit, Austral is
+mostly static (static crawler) while Wyatt is more dynamic (Playwright), so the two
+domains exercise both crawler backends.
+
+**Note the private tier is synthesized** (see the access-control resolution): RQ2 does not
+need the sites to have a real public/private division, because access control tests
+who-can-reach-what, not the content itself. Synthesizing the private tier gives exact
+ground-truth labels and removes the ingest-mislabelling confound. Criterion 5 from the
+original list ("plausible public/private division") is therefore dropped.
+
+**Write-up caution.** Wyatt is education-sector and so is the UTS *reference* corpus from
+Appendix A. The two study domains are Austral and Wyatt; UTS is preliminary scaffolding,
+not a third domain. Keep the RQ4 generalisation claim explicitly Austral↔Wyatt so a marker
+does not read it as "two education sites".
+
+**Follow-up actions**
+
+- [ ] Confirm at least one real `<table>` (or table-shaped content) on an Austral service
+      page before first ingest — the Capabilities and Powder Coating pages are the likely
+      homes. If none exists, `C7-table-split` loses its Austral signal and leans entirely
+      on Wyatt's course tables.
+- [ ] Mirror both sites locally before interaction probing (OD-5).
+- [ ] Synthesize the private tier for each domain, tagged `access_rule: explicit`.
