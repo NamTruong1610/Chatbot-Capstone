@@ -240,6 +240,12 @@ those. If a target workflow has that shape, that specific workflow may need live
 most affordance structure (forms, buttons, their labels and targets) is in the mirrored
 HTML/JS and does not. Check once the sites are mirrored.
 
+**Rendering wait strategy (`render_wait`) — live-crawl observation.** Observed 2026-07-25
+on live crawls: networkidle times out and drops the page on institution-scale sites
+(uts.edu.au); on Wyatt it matched domcontentloaded exactly. Baseline set to
+domcontentloaded — deterministic, cannot hang, no content cost on the study sites.
+(FR-CRAWL-02; baseline `config_hash` 364b8852… → 211286c8….)
+
 ### OD-6 — The two SME domains
 
 **Decision.** **Austral Manufacturing** (`austral-mfg`, https://australmanufacturing.com.au/)
@@ -289,3 +295,24 @@ does not read it as "two education sites".
       on Wyatt's course tables.
 - [ ] Mirror both sites locally before interaction probing (OD-5).
 - [ ] Synthesize the private tier for each domain, tagged `access_rule: explicit`.
+
+
+---
+
+## Logged findings
+
+Deferred engineering findings from live crawls — not decisions, not fixed now; tracked so
+the owning phase picks them up.
+
+### LF-1 — Control extraction captures page chrome (workflow-extraction phase)
+
+Observed on the Wyatt live crawl (2026-07-25): control extraction currently captures page
+chrome — cookie-consent banners ("Accept cookies", "Decline"), modal close buttons ("✕"),
+and empty-label controls — as controls. This inflates the control count and would pollute
+inferred workflows with non-steps.
+
+**Deferred fix:** a filtering pass at workflow-extraction time (FR-WF) that excludes
+consent/modal/nav chrome and empty-label controls before controls become workflow steps.
+This is not a crawler change — the crawler faithfully records what is on the page; the
+judgement about what counts as a *workflow step* belongs to workflow extraction. Logged,
+not fixed now.
