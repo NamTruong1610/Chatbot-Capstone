@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Wrapping Labels</title></head>
+<body>
+  <main>
+    <h1>Wrapping label edge cases</h1>
+    <form action="/submit-wrap" method="post">
+      <!-- (a) label wraps an input plus trailing helper text -->
+      <label>Email address <input type="email" name="email"> (we never share it)</label>
+
+      <!-- (b) one label wraps two inputs: it describes only the first -->
+      <label>Date of birth
+        <input type="text" name="dob_day">
+        <input type="text" name="dob_month">
+      </label>
+
+      <button type="submit">Register</button>
+    </form>
+  </main>
+</body>
+</html>
