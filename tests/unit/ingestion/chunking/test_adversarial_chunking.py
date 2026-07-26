@@ -12,10 +12,12 @@ crawler → chunker contract. They are deliberately minimal: each isolates one b
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from chatbot.config.schema import ChunkingConfig, ChunkStrategy, TableHandling
-from chatbot.ingestion.chunking import IngestContext, build_chunker
+from chatbot.ingestion.chunking import Chunk, Chunker, IngestContext, build_chunker
 from chatbot.ingestion.crawler.base import CrawledPage, Heading, Table
 
 CTX = IngestContext(
@@ -27,8 +29,12 @@ CTX = IngestContext(
 
 # The wide table: 7 columns, course name and its fees in the same row (like Wyatt /courses).
 # Rendered header line the strategies must keep with rows under `typed`:
-HEADER_CELLS = ["Course", "Code", "Duration", "Delivery", "Intake", "Domestic fee", "International fee"]
-ROW_DIPLOMA = ["Diploma of Business", "BSB50120", "52 weeks", "On campus", "Feb/Jul", "$9,500", "$11,500"]
+HEADER_CELLS = [
+    "Course", "Code", "Duration", "Delivery", "Intake", "Domestic fee", "International fee",
+]
+ROW_DIPLOMA = [
+    "Diploma of Business", "BSB50120", "52 weeks", "On campus", "Feb/Jul", "$9,500", "$11,500",
+]
 ROW_ADVDIP = [
     "Advanced Diploma of Leadership and Management", "BSB60420", "64 weeks", "On campus", "Feb",
     "$12,000", "$14,000",
@@ -65,7 +71,10 @@ def faq_page() -> CrawledPage:
         title="Frequently Asked Questions",
         text=text,
         depth=1,
-        headings=[Heading(level=2, text="How do I enrol?"), Heading(level=2, text="What are the fees?")],
+        headings=[
+            Heading(level=2, text="How do I enrol?"),
+            Heading(level=2, text="What are the fees?"),
+        ],
     )
 
 
@@ -86,7 +95,7 @@ def nested_headings_page() -> CrawledPage:
     )
 
 
-def _chunker(strategy: ChunkStrategy, **overrides: object):
+def _chunker(strategy: ChunkStrategy, **overrides: Any) -> Chunker:
     return build_chunker(ChunkingConfig(strategy=strategy, **overrides))
 
 
@@ -109,7 +118,8 @@ def test_typed_keeps_wide_table_whole_course_name_and_fee_never_split() -> None:
 
 
 def test_fixed_splits_wide_table_header_from_rows_appendix_a_reproduction() -> None:
-    chunks = _chunker(ChunkStrategy.fixed, fixed_lines_per_chunk=3).chunk_page(wide_table_page(), CTX)
+    chunker = _chunker(ChunkStrategy.fixed, fixed_lines_per_chunk=3)
+    chunks = chunker.chunk_page(wide_table_page(), CTX)
     # Appendix A condition: a row lands in a chunk with no header to give its cells meaning.
     fee_chunks = [c for c in chunks if "$14,000" in c.text]
     assert fee_chunks, "the Advanced Diploma fee must appear somewhere"
@@ -138,7 +148,7 @@ def test_typed_pairs_each_question_with_its_answer() -> None:
 # --------------------------------------------------------------------------------------
 
 
-def _withdrawal_chunk(heading_breadcrumb: bool):
+def _withdrawal_chunk(heading_breadcrumb: bool) -> Chunk:
     chunks = _chunker(ChunkStrategy.typed, heading_breadcrumb=heading_breadcrumb).chunk_page(
         nested_headings_page(), CTX
     )
@@ -188,4 +198,6 @@ def test_chunking_is_byte_identical_on_rerun(strategy: ChunkStrategy) -> None:
 
 def test_missing_identity_metadata_raises() -> None:
     with pytest.raises(ValueError):
-        IngestContext(domain_id="", document_id="site:x", config_id="C0-baseline", chunking_hash="d")
+        IngestContext(
+            domain_id="", document_id="site:x", config_id="C0-baseline", chunking_hash="d"
+        )

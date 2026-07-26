@@ -89,13 +89,62 @@ class Chunk:
 
     def __post_init__(self) -> None:
         if self.chunk_type not in CHUNK_TYPES:
-            raise ValueError(f"unknown chunk_type {self.chunk_type!r}; expected one of {sorted(CHUNK_TYPES)}")
+            raise ValueError(
+                f"unknown chunk_type {self.chunk_type!r}; expected one of {sorted(CHUNK_TYPES)}"
+            )
         required = ("chunk_id", "domain_id", "document_id", "text", "config_id", "chunking_hash")
         missing = [f for f in required if not getattr(self, f)]
         if missing:
             raise ValueError(f"chunk missing required metadata (FR-CHUNK-05): {', '.join(missing)}")
         if self.chunk_index < 0:
             raise ValueError(f"chunk_index must be >= 0, got {self.chunk_index}")
+
+    def to_payload(
+        self,
+        *,
+        access_level: str = "public",
+        access_rule: str = "default",
+        ingested_at: str | None = None,
+    ) -> dict[str, object]:
+        """Serialise to the docs/05 §1 payload dict for the vector store.
+
+        The chunker does not own ``access_level``/``access_rule`` (FR-ACL-02 stage) or
+        ``ingested_at`` (stamped at persist), so they are caller-supplied; the defaults let a
+        no-ACL caller (the spike runner) round-trip a chunk without an access stage. Only the
+        type-specific fields that are set for this chunk_type appear, matching docs/05 §1.
+        """
+        from datetime import UTC, datetime
+
+        payload: dict[str, object] = {
+            "chunk_id": self.chunk_id,
+            "domain_id": self.domain_id,
+            "document_id": self.document_id,
+            "chunk_index": self.chunk_index,
+            "text": self.text,
+            "chunk_type": self.chunk_type,
+            "access_level": access_level,
+            "access_rule": access_rule,
+            "source_url": self.source_url,
+            "page_title": self.page_title,
+            "heading_path": self.heading_path,
+            "filename": self.filename,
+            "ingest_source": "crawl",
+            "config_id": self.config_id,
+            "chunking_hash": self.chunking_hash,
+            "ingested_at": ingested_at or datetime.now(UTC).isoformat(),
+        }
+        type_specific: dict[str, object | None] = {
+            "table_index": self.table_index,
+            "row_range": list(self.row_range) if self.row_range is not None else None,
+            "question": self.question,
+            "workflow_name": self.workflow_name,
+            "step_count": self.step_count,
+            "confidence": self.confidence,
+            "all_source_urls": list(self.all_source_urls) if self.all_source_urls else None,
+            "revealed_by": self.revealed_by or None,
+        }
+        payload.update({k: v for k, v in type_specific.items() if v is not None})
+        return payload
 
 
 def make_chunk_id(document_id: str, chunk_index: int, text: str) -> str:
@@ -105,6 +154,37 @@ def make_chunk_id(document_id: str, chunk_index: int, text: str) -> str:
     index, different content — does not collide onto the same id.
     """
     return hashlib.sha1(f"{document_id}::{chunk_index}::{text}".encode()).hexdigest()
+
+
+def new_chunk(
+    ctx: IngestContext,
+    page: CrawledPage,
+    *,
+    index: int,
+    text: str,
+    chunk_type: str,
+    heading_path: str = "",
+    **type_fields: object,
+) -> Chunk:
+    """Assemble a :class:`Chunk`, stamping identity/provenance from ``ctx`` and ``page``.
+
+    One place where a chunk's non-content fields are filled, so a strategy only decides text,
+    type, and any type-specific fields — never how the id or provenance is formed.
+    """
+    return Chunk(
+        chunk_id=make_chunk_id(ctx.document_id, index, text),
+        domain_id=ctx.domain_id,
+        document_id=ctx.document_id,
+        chunk_index=index,
+        text=text,
+        chunk_type=chunk_type,
+        source_url=page.url,
+        page_title=page.title,
+        heading_path=heading_path,
+        config_id=ctx.config_id,
+        chunking_hash=ctx.chunking_hash,
+        **type_fields,  # type: ignore[arg-type]
+    )
 
 
 @runtime_checkable
@@ -162,4 +242,5 @@ __all__ = [
     "register_chunker",
     "build_chunker",
     "make_chunk_id",
+    "new_chunk",
 ]
