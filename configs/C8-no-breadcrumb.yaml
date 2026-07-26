@@ -1,0 +1,13 @@
+id: C8-no-breadcrumb
+extends: C0-baseline
+description: >
+  Single-rule isolation WITHIN typed. Flips only `heading_breadcrumb` to false, holding
+  every other typed behaviour identical to C0. Isolates the heading-breadcrumb rule alone —
+  its contribution to retrieval when prose chunks are no longer prefixed with their heading
+  path. Verify with `python -m chatbot.config diff C0-baseline C8-no-breadcrumb`.
+# rq is provisional per OD-4 (open): chunking is treated as an RQ1 sub-question for now, and
+# may be promoted to a fifth RQ if its effect exceeds C0 vs C2. Metadata only (not hashed).
+rq: [1]
+overrides:
+  chunking:
+    heading_breadcrumb: false
