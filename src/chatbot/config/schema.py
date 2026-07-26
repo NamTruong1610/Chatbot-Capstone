@@ -392,3 +392,29 @@ class ResolvedConfig(BaseModel):
         """
         canonical = json.dumps(self.parameter_sections(), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _section_hash(self, *names: str) -> str:
+        """Canonical sha256 over the named sections only (same recipe as ``config_hash``)."""
+        subset = {name: getattr(self, name).model_dump(mode="json") for name in names}
+        canonical = json.dumps(subset, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def chunking_hash(self) -> str:
+        """Hash of the resolved ``chunking`` section (docs/04 §5 index fingerprint field).
+
+        Distinct from ``config_hash``: the index fingerprint must not depend on parameters
+        that do not affect the stored vectors, or a retrieval-only arm (e.g. C2, which
+        differs from C0 only under ``retrieval``) would appear to need its own re-ingest.
+        """
+        return self._section_hash("chunking")
+
+    def index_key(self) -> str:
+        """Discriminator for the shared collection: which ingest produced a chunk.
+
+        Keys on the *ingest fingerprint* — ``chunking`` + ``embedding`` only, the sole
+        sections that change what is stored — so every config sharing those (C0–C4) shares
+        one index, while a chunking arm (C5) or an embedding arm gets its own partition.
+        Short by design: it is a per-chunk payload field filtered on every query, not a
+        provenance stamp (that is ``config_id`` + ``config_hash`` on the results row).
+        """
+        return self._section_hash("chunking", "embedding")[:16]
