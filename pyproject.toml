@@ -14,13 +14,15 @@ authors = [{ name = "Hai Nam Truong" }]
 # Runtime dependencies are added phase by phase. Phase 1 (ingestion) adds beautifulsoup4
 # for HTML parsing (affordance extraction), requests for the static crawler's HTTP
 # transport (docs/04 §2 static.py: "requests + bs4 fallback"), and playwright for the
-# JS-rendering backend (P1-2). No LangChain — OD-2 confines it to the recursive chunker.
+# JS-rendering backend (P1-2). Phase 2 (chunking) adds langchain-text-splitters — used, and
+# ONLY inside ingestion/chunking/recursive.py, per OD-2. No other LangChain surface.
 dependencies = [
     "pydantic>=2.6,<3",
     "pyyaml>=6,<7",
     "beautifulsoup4>=4.12,<5",
     "requests>=2.31,<3",
     "playwright>=1.40,<2",
+    "langchain-text-splitters>=0.2,<1",
 ]
 
 [project.optional-dependencies]

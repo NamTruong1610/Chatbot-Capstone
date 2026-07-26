@@ -20,8 +20,30 @@ from pathlib import Path
 from typing import Any
 
 from chatbot.config.loader import load_config
+from chatbot.ingestion.chunking import IngestContext, build_chunker
+from chatbot.ingestion.crawler.base import CrawledPage, Heading, Table
 from chatbot.spike import metrics
-from chatbot.spike.chunking import chunk_crawl
+
+
+def _page_from_dict(raw: dict[str, Any]) -> CrawledPage:
+    """Rebuild a CrawledPage from a crawl-JSON record (the fields the chunker reads)."""
+    return CrawledPage(
+        url=str(raw.get("url", "")),
+        title=str(raw.get("title", "")),
+        text=str(raw.get("text", "")),
+        depth=int(raw.get("depth", 0)),
+        headings=[
+            Heading(level=int(h["level"]), text=str(h["text"])) for h in raw.get("headings", [])
+        ],
+        tables=[
+            Table(
+                caption=str(t.get("caption", "")),
+                headers=[str(c) for c in t.get("headers", [])],
+                rows=[[str(c) for c in row] for row in t.get("rows", [])],
+            )
+            for t in raw.get("tables", [])
+        ],
+    )
 
 
 def load_testset(path: Path) -> list[dict[str, Any]]:
@@ -102,23 +124,19 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = load_config(args.config)
 
-    # 1. typed chunking (pure)
-    pages = json.loads(args.crawl.read_text(encoding="utf-8"))
-    chunks = chunk_crawl(
-        pages,
+    # 1. chunking (pure) — the real Phase 2 chunker, selected by cfg.chunking.strategy
+    pages = [_page_from_dict(p) for p in json.loads(args.crawl.read_text(encoding="utf-8"))]
+    chunker = build_chunker(cfg.chunking)
+    ctx = IngestContext(
         domain_id=args.domain_id,
-        root_url=args.root_url,
+        document_id=f"site:{args.root_url}",
         config_id=cfg.id,
         chunking_hash=cfg.config_hash()[:16],
-        size=cfg.chunking.size,
-        overlap=cfg.chunking.overlap,
-        min_chunk_chars=cfg.chunking.min_chunk_chars,
-        table_handling=cfg.chunking.table_handling.value,
-        heading_breadcrumb=cfg.chunking.heading_breadcrumb,
     )
+    chunks = [c.to_payload() for page in pages for c in chunker.chunk_page(page, ctx)]
     by_type: dict[str, int] = {}
     for c in chunks:
-        by_type[c["chunk_type"]] = by_type.get(c["chunk_type"], 0) + 1
+        by_type[str(c["chunk_type"])] = by_type.get(str(c["chunk_type"]), 0) + 1
     print(f"chunked {len(pages)} pages -> {len(chunks)} chunks {by_type}")
     if not chunks:
         sys.stderr.write("error: no chunks produced from the crawl JSON\n")
@@ -129,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
 
     embedder = Embedder(cfg.embedding.model, normalize=cfg.embedding.normalize)
     print(f"embedding {len(chunks)} chunks with {cfg.embedding.model} (dim {embedder.dimensions})")
-    vectors = embedder.encode([c["text"] for c in chunks])
+    vectors = embedder.encode([str(c["text"]) for c in chunks])
 
     # 3. store in real Qdrant with payload + four indexes
     from chatbot.spike.store import QdrantStore

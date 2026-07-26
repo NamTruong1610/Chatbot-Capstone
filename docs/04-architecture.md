@@ -124,9 +124,8 @@ and nothing else — no globals, no env reads (FR-CFG-05).
 ```python
 # ingestion/chunking/base.py
 class Chunker(Protocol):
-    def __init__(self, cfg: ChunkingConfig) -> None: ...
-    def chunk_page(self, page: CrawledPage) -> list[Chunk]: ...
-    def chunk_workflow(self, wf: Workflow) -> list[Chunk]: ...
+    def __init__(self, cfg: ChunkingConfig) -> None: ...           # config section only (FR-CFG-05)
+    def chunk_page(self, page: CrawledPage, ctx: IngestContext) -> list[Chunk]: ...
 
 CHUNKERS: dict[str, type[Chunker]] = {}
 
@@ -134,6 +133,18 @@ def register_chunker(name: str):
     def deco(cls): CHUNKERS[name] = cls; return cls
     return deco
 ```
+
+`ctx` (`IngestContext`) carries the per-run identity a complete chunk needs but the config
+section does not: `domain_id`, `document_id`, `config_id`, `chunking_hash`. It is passed to
+`chunk_page` rather than the constructor so the constructor stays `ChunkingConfig`-only
+(FR-CFG-05). The chunker sets only the payload subset it owns — identity, content, type,
+provenance — leaving `access_level`/`access_rule` (FR-ACL-02 stage) and `ingested_at`
+(persist time) to later stages; that omission is also what keeps `chunk_page` output
+byte-identical on a re-run (FR-CHUNK-06, no timestamp in the hashed content).
+
+`chunk_workflow(wf: Workflow)` is deferred: it consumes synthesised `Workflow` objects and
+workflow extraction (FR-WF) is a later phase with no data model built yet. It joins this
+protocol when FR-WF lands (see `docs/08`).
 
 ```python
 # retrieval/base.py
