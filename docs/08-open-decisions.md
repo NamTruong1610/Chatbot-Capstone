@@ -342,3 +342,14 @@ real Wyatt page's `text` actually contains its heading strings as standalone lin
 body prose is attributed to the right heading). If real `text` inlines headings differently
 (e.g. headings absent from `text`, or run together with body), the segmenter under-sections
 and breadcrumbs/QA pairing degrade. Flagged for the next real-pipeline run, not fixed now.
+
+**QA pairing depends on questions being crawler-extracted headings.** `typed`'s QA pairing
+keys off `section.heading_text.endswith("?")`, i.e. it only pairs a question with its answer
+when the question is a heading the crawler extracted. The crawler extracts headings from
+`<h1>`–`<h6>` only. The Phase 2 FAQ fixture encodes questions as `<h2>`, so the test passes —
+but **real FAQ pages usually encode questions as `<dt>`, `<summary>`, or accordion buttons,
+not headings.** On the real Wyatt `/faq`, `qa_pairing` may therefore silently produce **zero
+`qa` chunks** and fall through to prose. Verify against the real `/faq` structure before
+trusting the `qa` chunk_type on live data — if questions are `<dt>`/`<summary>`/accordion,
+QA pairing yields nothing. **Not fixed now:** robust detection needs its own adversarial
+fixture (questions as body lines, not headings) and a pass once the real FAQ shape is known.
