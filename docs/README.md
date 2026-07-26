@@ -13,6 +13,7 @@ Read in order on first pass. After that, `CLAUDE.md` routes you to the right doc
 | [`06-evaluation-protocol.md`](06-evaluation-protocol.md) | Metric definitions, scoring rules, statistical procedure |
 | [`07-build-plan.md`](07-build-plan.md) | 13-week phased plan, acceptance criteria, compute budget, risks |
 | [`08-open-decisions.md`](08-open-decisions.md) | Unresolved choices, plus the Decided audit trail. **Read before assuming anything.** |
+| [`09-research-log.md`](09-research-log.md) | Dated, append-only record of experiments run and what they taught (the *why* behind the pipeline's shape) |
 | [`proposal-amendment-OD1.md`](proposal-amendment-OD1.md) | Replacement text for the proposal's methodology section following the Qdrant decision |
 
 ## The one-paragraph version
