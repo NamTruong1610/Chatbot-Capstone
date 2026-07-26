@@ -20,6 +20,16 @@ Matching is normalised (lowercase, trailing slash stripped) and accepts substrin
 containment in either direction, so `page_1.txt` matches a full URL ending in that
 identifier.
 
+**Exception — bare-domain gold.** A `source_page` that is only a site root (path `/` or
+empty, e.g. `https://x.test/`) normalises to the bare domain, which is a substring of
+*every* page URL on that site. Under the substring rule it would score every retrieved
+chunk as relevant — a wildcard that silently inflates every metric. A root-only gold
+must therefore match the site root **exactly**; substring/trailing-slash matching applies
+only to entries carrying a real path (`/courses` still matches `/courses/`). This was
+found live during the thin-slice spike (a bare-domain gold gave a false-positive hit) and
+`evaluation/metrics.py` must implement it — the exact-vs-substring split, not just the
+normalisation. See the research log (`docs/09`, 2026-07-25).
+
 **Limitation to state in chapter 5:** page-level relevance cannot distinguish "retrieved
 the right page, wrong section" from "retrieved the right section". It therefore
 *understates* the value of any technique that improves within-page precision — which

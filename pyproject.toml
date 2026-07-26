@@ -32,6 +32,15 @@ dev = [
     "types-requests>=2.31,<3",
 ]
 
+# SPIKE extra — the thin vertical slice's runtime deps (embedding + Qdrant client). Kept
+# out of the core deps because they are heavy and the pure spike modules (chunking,
+# metrics) and their unit tests do not need them. Install with `pip install -e ".[dev,slice]"`
+# to run `python -m chatbot.spike.run`.
+slice = [
+    "qdrant-client>=1.7,<2",
+    "sentence-transformers>=2.5,<4",
+]
+
 [project.scripts]
 # Convenience alias; the documented entry point is `python -m chatbot.config`.
 chatbot-config = "chatbot.config.__main__:main"
@@ -55,9 +64,11 @@ mypy_path = "src"
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-# bs4 ships no py.typed; yaml's stubs are not installed. Both are used behind our own
-# typed wrappers, so silence the missing-import error without loosening our code.
-module = ["yaml", "bs4"]
+# bs4 ships no py.typed; yaml's stubs are not installed. The spike extra deps
+# (qdrant-client, sentence-transformers) are not installed in the lint/test env at all.
+# All are used behind our own typed wrappers, so silence missing-import without loosening
+# our code.
+module = ["yaml", "bs4", "qdrant_client", "qdrant_client.*", "sentence_transformers"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -1,0 +1,33 @@
+[
+  {
+    "url": "https://wyatt.nsw.edu.au/courses",
+    "title": "Courses",
+    "text": "Wyatt Education Group offers nationally recognised qualifications including the Diploma of Business and the Advanced Diploma of Leadership and Management. Enrolment is open to domestic and international students.",
+    "depth": 0,
+    "headings": [{"level": 1, "text": "Courses"}],
+    "links": [],
+    "forms": [],
+    "tables": [
+      {
+        "caption": "Course fees",
+        "headers": ["Course", "Code", "Duration", "International fee"],
+        "rows": [
+          ["Diploma of Business", "BSB50120", "52 weeks", "$11,500"],
+          ["Advanced Diploma of Leadership and Management", "BSB60420", "64 weeks", "$14,000"]
+        ]
+      }
+    ],
+    "controls": []
+  },
+  {
+    "url": "https://wyatt.nsw.edu.au/certificate-iii-tiling",
+    "title": "Certificate III in Wall and Floor Tiling",
+    "text": "The Certificate III in Wall and Floor Tiling is delivered at the Lidcombe workshop facility in the Sydney metro area. The total course fee is $10,500 for international students and $6,500 for domestic students.",
+    "depth": 1,
+    "headings": [{"level": 1, "text": "Certificate III in Wall and Floor Tiling"}],
+    "links": [],
+    "forms": [],
+    "tables": [],
+    "controls": []
+  }
+]
