@@ -9,7 +9,7 @@ from __future__ import annotations
 # Strategy modules imported for their registration side effect (docs/04 §1): importing this
 # package populates CHUNKERS so build_chunker can resolve any strategy without the caller
 # knowing which module defines it. `noqa: F401` — imported for the decorator, not a name.
-from chatbot.ingestion.chunking import fixed, recursive  # noqa: F401
+from chatbot.ingestion.chunking import fixed, recursive, typed  # noqa: F401
 from chatbot.ingestion.chunking.base import (
     CHUNK_TYPES,
     CHUNKERS,

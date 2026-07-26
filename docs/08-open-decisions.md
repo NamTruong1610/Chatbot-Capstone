@@ -316,3 +316,29 @@ consent/modal/nav chrome and empty-label controls before controls become workflo
 This is not a crawler change — the crawler faithfully records what is on the page; the
 judgement about what counts as a *workflow step* belongs to workflow extraction. Logged,
 not fixed now.
+
+### LF-2 — `typed` implements three of four rules; workflow-atomic deferred (FR-WF phase)
+
+The `typed` chunker (Phase 2) implements the **table**, **qa**, and **prose** rules of
+FR-CHUNK-02. The fourth rule — **workflow** kept atomic — is **not** implemented: it
+consumes synthesised `Workflow` objects, and workflow extraction (FR-WF) is a later phase
+with no `Workflow` data model built yet. Inventing that model inside a chunking phase would
+pre-empt FR-WF's design.
+
+Recorded so "typed chunking" is never silently read as all four rules. **Owning phase:**
+FR-WF. When it lands it adds the `Workflow` type, `chunk_workflow` to the `Chunker` protocol
+(docs/04 §3), and the atomic rule + tests. No results measured with `typed` before then
+exercise workflow chunks, so nothing needs re-running on account of the gap.
+
+### LF-3 — `typed` prose segmentation assumes headings appear as lines in page text
+
+`typed` builds heading-bounded sections (and pairs FAQ Q/A) by locating each heading's text
+as a line within the page's flat `text` blob — because `CrawledPage` carries a flat `text`
+plus a flat `headings` list with no explicit mapping between them. The Phase 2 fixtures are
+built to satisfy that shape, and it is unverified against real crawler output.
+
+**Verify before trusting `typed` on live data:** on the next real-pipeline run, check that a
+real Wyatt page's `text` actually contains its heading strings as standalone lines (and that
+body prose is attributed to the right heading). If real `text` inlines headings differently
+(e.g. headings absent from `text`, or run together with body), the segmenter under-sections
+and breadcrumbs/QA pairing degrade. Flagged for the next real-pipeline run, not fixed now.
