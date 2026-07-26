@@ -1,0 +1,15 @@
+id: C6-chunk-recursive
+extends: C0-baseline
+description: >
+  Strategy-level comparison against the typed baseline. Swaps the whole chunking strategy
+  to `recursive` (character splitter honouring size/overlap) — standard RAG practice, the
+  honest middle baseline. Because it changes the strategy, it bundles several behaviour
+  changes at once — no table handling, no QA pairing, no heading breadcrumb — so it does
+  NOT isolate any single rule; C0 vs C6 measures typed-vs-recursive as whole strategies.
+  Verify with `python -m chatbot.config diff C0-baseline C6-chunk-recursive`.
+# rq is provisional per OD-4 (open): chunking is treated as an RQ1 sub-question for now, and
+# may be promoted to a fifth RQ if its effect exceeds C0 vs C2. Metadata only (not hashed).
+rq: [1]
+overrides:
+  chunking:
+    strategy: recursive
