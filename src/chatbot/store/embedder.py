@@ -38,15 +38,22 @@ class SentenceTransformerEmbedder:
     def __init__(self, cfg: EmbeddingConfig) -> None:
         from sentence_transformers import SentenceTransformer
 
-        self._model: Any = SentenceTransformer(cfg.model)
-        self._normalize = cfg.normalize
-        actual = int(self._model.get_sentence_embedding_dimension())
-        if actual != cfg.dimensions:
+        model = SentenceTransformer(cfg.model)
+        # get_sentence_embedding_dimension() is typed int | None; None means the model does
+        # not report a fixed dimension, which we cannot validate against — fail loud.
+        dim = model.get_sentence_embedding_dimension()
+        if dim is None:
             raise ValueError(
-                f"embedding.model {cfg.model!r} produces {actual}-d vectors but "
+                f"embedding.model {cfg.model!r} does not report an embedding dimension"
+            )
+        if dim != cfg.dimensions:
+            raise ValueError(
+                f"embedding.model {cfg.model!r} produces {dim}-d vectors but "
                 f"embedding.dimensions is {cfg.dimensions}. Fix the config to match the model."
             )
-        self._dimensions = actual
+        self._model: Any = model
+        self._normalize = cfg.normalize
+        self._dimensions: int = dim
 
     @property
     def dimensions(self) -> int:
