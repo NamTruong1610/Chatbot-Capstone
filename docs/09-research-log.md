@@ -8,6 +8,36 @@ with a new one.
 
 ---
 
+## 2026-07-26 — The naive-chunking penalty is table-size-dependent (and answer-span measures it)
+
+With `fixed` corrected to char-based (OD-13), the C0-vs-C5 picture resolved into a precise,
+reportable finding — confirmed on real chunks from the Wyatt corpus:
+
+- **Compact table (courses, 4 rows): survives char-fixed.** The whole flattened table fits
+  inside one ~400-char window, so a fee stays with its course name under both configs. The
+  two fee questions **tie** — C0 and C5 both retrieve the answer whole.
+- **Long table (Building & Construction unit list, 8 rows): orphaned by char-fixed.** The
+  operative phrase of unit `CPCCBC4001` ("National Construction Code") lands in a *different*
+  char-window from its code, so no single C5 chunk answers "what does CPCCBC4001 cover?".
+  Typed keeps the table row whole, so C0 answers it. C0 **hit**, C5 **miss**.
+
+**The contribution:** the naive-chunking penalty is not universal — it is **table-size-
+(more precisely, span-distance-) dependent**. Char-fixed only orphans an answer whose
+components sit more than ~one window apart in the flattened text (a long table, or a value
+tied to a far-away column header); adjacent answer-units (a fee in its row, a short
+code+title) survive at any position. This is a sharper and more honest claim than "chunking
+dominates retrieval."
+
+**Measuring it required a new ruler.** Page-level relevance is blind to this (both configs
+return a chunk from the right page). So we added **answer-span relevance** (docs/06 §1.1): a
+chunk counts only if the answer's *usable unit* co-occurs in it. The `CPCCBC4001` case is the
+positive control (C0 answer-hit, C5 answer-miss); the fee cases are the negative controls
+(both hit). Components are authored blind — from the question and source page, never from what
+a config retrieved — or the metric would manufacture its own result. Answer-span is reported
+**alongside** page-level, never replacing it.
+
+---
+
 ## 2026-07-26 — Why C0 ≈ C5, and the C5 redefinition (pre-harness diagnosis)
 
 Building toward the first real C0-vs-C5 comparison, C0 and C5 looked identical and we stopped
