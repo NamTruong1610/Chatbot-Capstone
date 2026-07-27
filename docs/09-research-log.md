@@ -8,6 +8,44 @@ with a new one.
 
 ---
 
+## 2026-07-26 — First real C0-vs-C5 comparison on Wyatt (answer-span validated)
+
+The first real, ruler-validated retrieval comparison, confirmed on real Wyatt chunks. Three
+findings, reported together because they only make sense together:
+
+- **(a) Answer-span, long table — C0 HIT / C5 MISS.** *"What does unit CPCCBC4001 cover?"*
+  (source: the Diploma of Building & Construction unit list, an 8-row table). Typed (C0)
+  keeps the unit's row whole, so one chunk carries the code **and** its operative description
+  ("National Construction Code") → answer-relevant. Char-fixed (C5) hard-cuts the flattened
+  page text, landing the code and that phrase in **different** windows → no chunk carries the
+  usable unit → miss.
+- **(b) Answer-span, compact table — C0/C5 TIE (both HIT).** The fee questions (Diploma of
+  Business international fee; Certificate III tiling fee) live in the compact 4-row courses
+  table, which fits inside one char-window, so the answer survives char-fixed intact — both
+  configs hit.
+- **(c) Page-level — tied, blind.** Both configs return a chunk from the gold page for every
+  case, so page-level hit_rate is identical C0=C5 and cannot see (a). The docs/06 §1
+  limitation, live.
+
+**Finding.** Naive fixed-size chunking orphans records from **long** tables but not **compact**
+ones — the penalty is **table-size- (span-distance-) dependent** — and it is **invisible to
+page-level metrics, visible only to answer-span** (docs/06 §1.1). The honest, precise
+contribution is not "chunking dominates retrieval" but "naive chunking has a specific,
+measurable failure on long structured records that the standard page-level ruler misses."
+
+**Supersession.** This replaces the earlier C0≈C5 null, which was a **mis-reproduction**: the
+retired line-based `fixed` never fragmented the crawler's whitespace-normalised single-line
+text, so it could not orphan anything. Char-based `fixed` (OD-13) is the faithful naive
+baseline; the effect above is on that corrected arm.
+
+**Provenance.** Answer-span components authored **blind** (question + source page, docs/06
+§1.1): `CPCCBC4001` (the unit the question names) and `National Construction Code` (the
+operative substance of its description) — not derived from any config's output. Chunk-level
+HIT/MISS is proven deterministically in `test_answer_span_effect`; the scored top-k readout
+is the harness `run` command (needs the live corpus + Qdrant + model).
+
+---
+
 ## 2026-07-26 — The naive-chunking penalty is table-size-dependent (and answer-span measures it)
 
 With `fixed` corrected to char-based (OD-13), the C0-vs-C5 picture resolved into a precise,
