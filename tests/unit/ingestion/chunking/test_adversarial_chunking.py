@@ -117,15 +117,44 @@ def test_typed_keeps_wide_table_whole_course_name_and_fee_never_split() -> None:
     assert "Advanced Diploma of Leadership and Management" in text and "$14,000" in text
 
 
-def test_fixed_splits_wide_table_header_from_rows_appendix_a_reproduction() -> None:
-    chunker = _chunker(ChunkStrategy.fixed, fixed_lines_per_chunk=3)
-    chunks = chunker.chunk_page(wide_table_page(), CTX)
-    # Appendix A condition: a row lands in a chunk with no header to give its cells meaning.
-    fee_chunks = [c for c in chunks if "$14,000" in c.text]
-    assert fee_chunks, "the Advanced Diploma fee must appear somewhere"
-    assert all(
-        "International fee" not in c.text for c in fee_chunks
-    ), "fixed(3 lines) must orphan a data row from its header — C5 must differ from C0"
+def test_fixed_char_cut_orphans_a_record_where_typed_keeps_it_whole() -> None:
+    # Teeth (OD-13): a hard char cut severs a record's fields across chunks — the naive
+    # baseline failure line-based fixed could not produce. The name and the fee sit >size
+    # apart in the flattened page text, so no single fixed window holds both.
+    text = "Diploma of Business " + "padding word " * 8 + "international fee $11,500"
+    page = CrawledPage(url="https://wyatt.nsw.edu.au/courses", title="Courses", text=text, depth=0)
+    fixed_chunks = _chunker(ChunkStrategy.fixed, size=50, overlap=0).chunk_page(page, CTX)
+    assert "Diploma of Business" in text and "$11,500" in text  # both present in the source
+    assert not any(
+        "Diploma of Business" in c.text and "$11,500" in c.text for c in fixed_chunks
+    ), "char-fixed must orphan the record: no single window holds name AND fee"
+
+    # Contrast: typed keeps the structured record whole in one table chunk.
+    tpage = CrawledPage(
+        url="https://wyatt.nsw.edu.au/courses",
+        title="Courses",
+        text="",
+        depth=0,
+        tables=[
+            Table(
+                caption="Course fees",
+                headers=["Course", "International fee"],
+                rows=[["Diploma of Business", "$11,500"]],
+            )
+        ],
+    )
+    typed_chunks = _chunker(ChunkStrategy.typed).chunk_page(tpage, CTX)
+    assert any(
+        "Diploma of Business" in c.text and "$11,500" in c.text for c in typed_chunks
+    ), "typed must keep the course name and its fee in one chunk"
+
+
+def test_fixed_uses_character_windows_of_size() -> None:
+    # Char-based, not line-based: window length is bounded by chunking.size.
+    page = CrawledPage(url="https://x/p", title="P", text="word " * 200, depth=0)
+    chunks = _chunker(ChunkStrategy.fixed, size=80, overlap=0).chunk_page(page, CTX)
+    assert len(chunks) > 1
+    assert all(len(c.text) <= 80 for c in chunks)
 
 
 # --------------------------------------------------------------------------------------
@@ -175,7 +204,8 @@ def test_typed_omits_breadcrumb_prefix_when_disabled() -> None:
 
 @pytest.mark.parametrize("strategy", list(ChunkStrategy))
 def test_every_strategy_is_selectable_and_produces_chunks(strategy: ChunkStrategy) -> None:
-    chunks = _chunker(strategy).chunk_page(wide_table_page(), CTX)
+    # faq_page has prose text (char-based fixed reads page.text) and typed-relevant structure.
+    chunks = _chunker(strategy).chunk_page(faq_page(), CTX)
     assert chunks, f"{strategy} produced no chunks"
     assert all(c.chunk_type in {"workflow", "table", "qa", "prose"} for c in chunks)
 

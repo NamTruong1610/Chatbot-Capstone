@@ -67,7 +67,6 @@ held constant unless you deliberately open them up.
 | **`strategy`** | enum | `typed` | `fixed` · `recursive` · `typed` |
 | **`size`** | int | 400 | 256 · 400 · 800 |
 | `overlap` | int | 50 | 0 · 50 · 100 |
-| `fixed_lines_per_chunk` | int | 3 | only for `fixed` |
 | **`table_handling`** | enum | `header_repeat` | `split` · `header_repeat` · `atomic` |
 | `heading_breadcrumb` | bool | true | `true` · `false` |
 | `qa_pairing` | bool | true | `true` · `false` |
@@ -194,7 +193,7 @@ Fifteen named configurations. Each isolates **one** manipulation from the baseli
 
 | ID | Manipulation | Notes |
 |---|---|---|
-| `C5-chunk-fixed` | `chunking.strategy: fixed`, `fixed_lines_per_chunk: 3` | **Replicates the Appendix A condition.** The direct test of whether the observed table failure was chunking |
+| `C5-chunk-fixed` | `chunking.strategy: fixed` (naive fixed-size char windows, size 400) | **Replicates the Appendix A condition** — the naive fixed-size baseline. The direct test of whether the observed table failure was chunking. Char-based, not line-based (OD-13) |
 | `C6-chunk-recursive` | `chunking.strategy: recursive` | Standard RAG practice; the honest middle baseline |
 | `C7-table-split` | `chunking.table_handling: split` | Isolates the table rule alone, holding everything else typed |
 | `C8-no-breadcrumb` | `chunking.heading_breadcrumb: false` | Isolates the breadcrumb's contribution to both retrieval arms |

@@ -8,7 +8,35 @@ with a new one.
 
 ---
 
-## 2026-07-25 — Thin vertical slice, Wyatt (dense / typed chunking / MiniLM / C0-baseline)
+## 2026-07-26 — Why C0 ≈ C5, and the C5 redefinition (pre-harness diagnosis)
+
+Building toward the first real C0-vs-C5 comparison, C0 and C5 looked identical and we stopped
+to find out why **before** building the scoring harness on top. The chain of findings:
+
+- **Page-level relevance is blind to intra-page chunking damage.** Every chunk from a page
+  carries that page's `source_url`, and page-level match keys on `source_url` alone — so a
+  config that keeps a table whole and one that shreds it both "hit" the gold page. Confirmed
+  structurally; it is exactly the limitation docs/06 §1 already flags.
+- **The chunker keeps table rows atomic.** `_layout` renders each table row as one
+  pipe-joined line, and the (then) line-based `fixed` split on line *count*, so a row was
+  never cut — "Diploma of Business" and "$11,500" stayed together under both configs.
+- **The real crawler flattens the whole body — including the table — into a single-line
+  `page.text`** (`extract_main_text = _norm(body.get_text(" "))`). So even the structured
+  table's content reappears, flattened, in the prose text; any chunk carrying `page.text`
+  holds the full record. The earlier fixture misled us because its `text` omitted the table.
+- **Root cause: line-based `fixed` is degenerate on normalised text.** With `page.text` a
+  single line, "N lines" cannot fragment prose — one chunk for the whole page. That is not
+  the naive fixed-size baseline the literature and Appendix A describe.
+
+**Decision (OD-13):** redefine `C5 fixed` as **character-based** (hard `size`-char windows,
+no boundary respect), retire line-based `fixed`. This is a correctness fix to the baseline,
+not effect-hunting — **a second null under the corrected baseline is a valid finding.** The
+answer-span metric (a chunk is answer-relevant only if the answer's *usable unit* co-occurs
+in one chunk — e.g. course name + column header + figure) is designed and reviewed but **not
+built**: we do not build a ruler until the real chunks show there is an effect to measure.
+Next: re-run the real chunk dump under char-based C5 and report whatever it shows, including
+another null.
+
 
 First end-to-end number. One domain (Wyatt), one config (`C0-baseline`), dense retrieval
 only. **Real baseline: hit_rate 0.80, MRR 0.80 (n=5).** A deliberate spike, not the harness

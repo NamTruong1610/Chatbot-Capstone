@@ -297,6 +297,33 @@ does not read it as "two education sites".
 - [ ] Synthesize the private tier for each domain, tagged `access_rule: explicit`.
 
 
+### OD-13 — `C5 fixed` redefined from line-based to character-based
+
+**Status:** ☑ Decided · 2026-07-26
+
+**Decision.** The `fixed` chunker (arm `C5`) is redefined from **line-based** (group every
+`fixed_lines_per_chunk` lines) to **character-based** (hard-cut the page text into windows of
+`chunking.size` characters, stepping by `size - overlap`, respecting no boundary). The
+line-based implementation and the `fixed_lines_per_chunk` config field are **retired** — not
+kept as a parallel arm.
+
+**Rationale.** The crawler normalises every page to whitespace-collapsed text (`_norm =
+" ".join(text.split())`), which is typically a **single line**. Line-based "N-line" chunking
+therefore cannot fragment normalised prose at all — it emits one chunk for the whole page
+text — so it neither reproduces the naive fixed-size baseline used across the RAG literature
+nor the Appendix A failure (a table split mid-way by fixed-size chunking). Line-based `fixed`
+was thus an **artefact of text-flattening**, not the baseline `C5` was meant to be. The
+character-based version is the faithful naive baseline: a hard cut that can sever a record's
+fields across chunks. This is a **correctness fix to C5's definition**, decided on that basis
+alone — not to manufacture a C0-vs-C5 difference (a null under the corrected baseline is a
+valid, reportable outcome).
+
+**Config.** `fixed` keys on `chunking.size` (characters) — the same knob `recursive` uses —
+the two differing precisely in boundary respect: `fixed` cuts at exact character positions,
+`recursive` backs off to separators to avoid cutting mid-unit. `fixed_lines_per_chunk` is
+removed from the schema and `C0-baseline.yaml`. Docs updated: FR-CHUNK-01 (docs/02),
+docs/03 §2.2 and §3. No results existed when this changed, so no re-run is owed.
+
 ---
 
 ## Logged findings
