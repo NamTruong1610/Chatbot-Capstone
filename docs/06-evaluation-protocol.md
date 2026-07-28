@@ -35,6 +35,38 @@ the right page, wrong section" from "retrieved the right section". It therefore
 *understates* the value of any technique that improves within-page precision — which
 plausibly includes reranking. Flag this when interpreting RQ1.
 
+### 1.1 Answer-span relevance (the chunking arms)
+
+Page-level relevance is blind to intra-page chunking damage: every chunk of a page shares
+that page's `source_url`, so a config that keeps an answer whole and one that shreds it both
+"hit" the page. To measure the chunking arms (`C5`–`C8`) we add **answer-span relevance**,
+reported **alongside** page-level — never replacing it.
+
+A retrieved chunk is **answer-relevant** for a case iff it contains the answer as a *usable
+unit*: every required **component** appears in that one chunk.
+
+**Authoring principle — author blind to the configs under test.** A case's components are the
+spans a human must see **in one place** to use the answer, judged from the **question and the
+source page alone**, never from what any configuration retrieved. A bare "$11,500" is unusable
+without its course and fee-type; a unit code is unusable without the operative part of its
+description. Components are frozen with the test set before the first run. **Deriving
+components from a configuration's output is a validity failure** — it manufactures the result.
+
+**Components** (`answer_terms`, docs/05 §2): `;`-separated components, each `|`-separated
+alternatives. Answer-relevant iff **every** component has **≥1** alternative present (AND
+across components, OR within a component). The `|` absorbs genuine source variance/conflicts
+(a fee stated `$11,500` on the table and `$11,250` in a breakdown) so the matcher records no
+false miss where the source itself differs.
+
+**Matching:** casefold + collapse whitespace, then substring. Deliberately literal — no
+numeric/currency canonicalisation — so a match is exactly what a reader can see and no hidden
+normalisation invents a positive (`11500` inside `1,150,000`). Format variance is handled by
+authoring alternatives against empirically verified chunk text.
+
+**Metrics:** `answer_hit@k` (any of the top-k chunks answer-relevant) and `answer_precision@k`.
+`answer_terms` empty ⇒ answer-span is **null** (not zero) for that case: only cases with an
+authored single-place unit are answer-scored (open-ended lists and prose are page-level only).
+
 ---
 
 ## 2. Retrieval metrics
@@ -47,6 +79,8 @@ Let `R` = retrieved sources in rank order, `G` = gold sources, `k` = `retrieval.
 | **recall@k** | `\|{g ∈ G : g ∈ R[:k]}\| / \|G\|` | How much of the answer we found |
 | **MRR** | `1 / rank of first relevant`, else `0` | How near the top the answer landed |
 | **hit_rate@k** | `1` if any relevant in `R[:k]`, else `0` | Could the generator have answered at all |
+| **answer_hit@k** | `1` if any chunk in `R[:k]` is answer-relevant (§1.1), else `0`; **null** if no unit declared | Did the answer survive chunking, whole, in one chunk |
+| **answer_precision@k** | fraction of `R[:k]` that are answer-relevant; **null** if no unit declared | How much of what we returned carried the whole answer |
 | **latency_ms** | Wall clock, retrieval only | What the quality cost |
 
 `hit_rate` is the metric to lead with for an SME audience. precision@5 improving from

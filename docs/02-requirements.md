@@ -70,7 +70,7 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 
 | ID | Requirement | Pri | Trace |
 |---|---|---|---|
-| FR-CHUNK-01 | Support at least three selectable strategies: `fixed` (n lines, replicates Appendix A), `recursive` (character splitter with overlap), `typed` (rule per content type). | M | Appendix A |
+| FR-CHUNK-01 | Support at least three selectable strategies: `fixed` (naive fixed-size **character** windows of `chunking.size`, hard-cut with no boundary respect — the naive RAG baseline / Appendix A condition; **not** line-based, see OD-13), `recursive` (character splitter honouring `size`/`overlap` and backing off to separators so it does not cut mid-unit), `typed` (rule per content type). `fixed` and `recursive` differ precisely in boundary respect. | M | Appendix A |
 | FR-CHUNK-02 | `typed` strategy rules: `workflow` never split · `table` split by row group with header and caption repeated on every chunk · `qa` question and answer together · `prose` recursive split within heading boundaries. | M | Appendix A |
 | FR-CHUNK-03 | Under `typed`, each prose chunk is prefixed with its heading breadcrumb. Toggleable via `chunking.heading_breadcrumb`. | S | Retrieval quality |
 | FR-CHUNK-04 | `chunking.size` and `chunking.overlap` are configurable and apply to strategies that use them. | M | RQ1 |

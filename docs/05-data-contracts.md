@@ -47,15 +47,19 @@ at ingest → raise (FR-CHUNK-05).
   "ingest_source":   str,    # crawl | upload
   "config_id":       str,    # required — which config built this chunk
   "chunking_hash":   str,    # required — see docs/04 §5
+  "index_key":       str,    # required — chunking+embedding fingerprint (docs/04 §5); the
+                             #   discriminator that partitions the shared collection so a
+                             #   dense run over one config never scores another's vectors
   "ingested_at":     str,    # ISO 8601 UTC
 }
 ```
 
-**Indexed fields.** `domain_id`, `access_level`, `document_id`, `chunk_type` each
-require a Qdrant payload index (`PayloadSchemaType.KEYWORD`), created at startup
-(FR-STORE-03). Without them every filtered query scans the collection, and since
+**Indexed fields.** `domain_id`, `access_level`, `document_id`, `chunk_type` **and
+`index_key`** each require a Qdrant payload index (`PayloadSchemaType.KEYWORD`), created at
+startup (FR-STORE-03). Without them every filtered query scans the collection, and since
 `latency_ms` is a reported RQ1 result, an unindexed run measures the missing index rather
-than the retrieval architecture.
+than the retrieval architecture. `index_key` is indexed because every query filters on it
+(it selects the config's own index within the shared collection).
 
 ---
 
@@ -64,11 +68,11 @@ than the retrieval architecture.
 `data/testsets/<domain_id>.csv`. UTF-8, header row required, RFC 4180 quoting.
 
 ```csv
-question,answer,source_page,question_type,access_level,notes
-"When does enrolment open for undergraduate Engineering students?","Thursday 27 November 2025",page_1.txt,factual_lookup,public,
-"What steps do I take to enrol in a Summer subject from another faculty?","Check self-enrol eligibility, then submit an eRequest",page_5.txt;page_2.txt,multi_chunk,public,"spans two pages"
-"What is the GPA requirement for Summer session?",N/A,,out_of_scope,public,"not in corpus"
-"Which students have sanctions preventing enrolment?","Restricted to administrative staff",N/A,factual_lookup,private,
+question,answer,source_page,question_type,access_level,answer_terms,notes
+"When does enrolment open for undergraduate Engineering students?","Thursday 27 November 2025",page_1.txt,factual_lookup,public,enrolment;27 November 2025,
+"What steps do I take to enrol in a Summer subject from another faculty?","Check self-enrol eligibility, then submit an eRequest",page_5.txt;page_2.txt,multi_chunk,public,,"spans two pages; open-ended -> answer-span null"
+"What is the GPA requirement for Summer session?",N/A,,out_of_scope,public,,"not in corpus"
+"Which students have sanctions preventing enrolment?","Restricted to administrative staff",N/A,factual_lookup,private,,
 ```
 
 | Column | Required | Values |
@@ -78,6 +82,7 @@ question,answer,source_page,question_type,access_level,notes
 | `source_page` | conditional | Page identifier(s), `;`-separated. **Empty for `out_of_scope`.** Required otherwise. |
 | `question_type` | yes | `factual_lookup` · `reasoning` · `multi_chunk` · `out_of_scope` |
 | `access_level` | yes | `public` · `private` |
+| `answer_terms` | no | The answer's *usable unit* for answer-span (§06 §1.1): `;`-separated components, each `|`-separated alternatives. Empty ⇒ answer-span null for the case. Authored blind to the configs. |
 | `notes` | no | Free text for the researcher. Never parsed. |
 
 ### Validation rules (FR-EVAL-01)
@@ -183,12 +188,15 @@ domain_id, case_id, question_type, access_level, role,
 scored_as,                      # retrieval | abstention
 chunks_returned, chunk_types,   # JSON list
 precision_at_k, recall_at_k, mrr, hit_rate,
+answer_hit_at_k, answer_precision_at_k,   # answer-span (docs/06 §1.1); null if no unit
 leaked_chunks, latency_ms,
 retrieved_sources               # JSON list, ordered
 ```
 
 `precision_at_k` … `hit_rate` are **null** when `scored_as == "abstention"`. Null is not
-zero — see `docs/06` §3.
+zero — see `docs/06` §3. `answer_hit_at_k`/`answer_precision_at_k` are additionally null when
+the case declares no `answer_terms` unit (docs/06 §1.1) — answer-span scores only cases with
+an authored single-place answer.
 
 ### 5.2 Per-question generation rows
 

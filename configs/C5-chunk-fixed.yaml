@@ -2,11 +2,12 @@ id: C5-chunk-fixed
 extends: C0-baseline
 description: >
   Strategy-level comparison against the typed baseline. Swaps the whole chunking strategy
-  to `fixed` (N-line chunks; fixed_lines_per_chunk stays the baseline 3), reproducing the
-  Appendix A condition. Because it changes the strategy, it bundles several behaviour
-  changes at once — no table handling, no QA pairing, no heading breadcrumb — so it does
-  NOT isolate any single rule; C0 vs C5 measures typed-vs-fixed as whole strategies. Verify
-  with `python -m chatbot.config diff C0-baseline C5-chunk-fixed`.
+  to `fixed` — the naive RAG baseline: hard fixed-size character windows over the page text
+  (size 400, inherited), respecting no boundary or structure (OD-13). This is the Appendix A
+  condition. Because it changes the strategy, it bundles several behaviour changes at once —
+  no table handling, no QA pairing, no heading breadcrumb — so it does NOT isolate any single
+  rule; C0 vs C5 measures typed-vs-fixed as whole strategies. Verify with
+  `python -m chatbot.config diff C0-baseline C5-chunk-fixed`.
 # rq is provisional per OD-4 (open): chunking is treated as an RQ1 sub-question for now, and
 # may be promoted to a fifth RQ if its effect exceeds C0 vs C2. Metadata only (not hashed).
 rq: [1]

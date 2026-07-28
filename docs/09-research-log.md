@@ -8,7 +8,114 @@ with a new one.
 
 ---
 
-## 2026-07-25 — Thin vertical slice, Wyatt (dense / typed chunking / MiniLM / C0-baseline)
+## 2026-07-26 — C0 vs C5 on Wyatt: chunking is near-neutral, two opposing forces (MEASURED)
+
+The measured result from the committed harness — dense retrieval, `top_k=5`, answer-span
+scored on the live Wyatt index: **answer_hit_rate C0 (typed) = 0.25, C5 (fixed) = 0.75
+(n=4 answer-scored cases).** Naive char-fixed slightly *beats* typed on this corpus — the
+opposite of Appendix A's prediction. Reading the actual ranks/scores per chunk, two opposing
+forces explain it, and neither dominates:
+
+- **Force 1 — chunk integrity (favours typed; Appendix A's concern).** Fragmenting a record
+  across chunks can orphan the answer so no single chunk carries the full unit. **On Wyatt
+  this barely fires.** Compact tables (the 4-row courses table) fit inside one ~400-char
+  window, so nothing orphans. And `typed` does **not** emit a giant whole-table chunk either:
+  `header_repeat` packs rows only until `size` (400), so *both* configs produce ~400-char
+  chunks. The force-1 scan found **no** Wyatt question where C5 orphans the answer in the
+  index *and* a C0 chunk carrying it ranks top-5. Force 1 does not survive to retrieval here.
+- **Force 2 — chunk focus (favours fixed).** For a *specific-unit* question ("what does
+  CPCCBC4001 cover?"), C0's row-group chunk mixes several units' text, so its mean-pooled
+  MiniLM vector is a muddier match than a C5 window dominated by that unit's tokens.
+  **Measured: C0's full-unit chunk ranked below C5's focused fragment** for the query — a real
+  dense-retrieval effect. It is **not** a matching bug: the matcher provably requires all
+  components in one chunk (a severed pair scores MISS), so C5's live hits come from single
+  windows that genuinely contain the whole unit on the real page.
+
+**Finding.** On SME-scale corpora like Wyatt, **chunking strategy is near-neutral, slightly
+favouring `fixed`.** The contribution is the pair of forces — **chunk-integrity vs
+chunk-focus** — trading off along **table-size × question-specificity**: integrity only
+matters for records long enough to orphan (rare at 400 chars), while focus penalises any
+chunk that averages unrelated records for a specific query. Page-level metrics are blind to
+both (both configs return a chunk from the gold page); answer-span (docs/06 §1.1) is what made
+the tradeoff visible.
+
+**Supersession.** This committed-code, retrieval-scored result **supersedes the earlier
+"C0 HIT / C5 MISS" observation**, which was a *chunk-level* artifact on a fixture sized to
+sever. Under live retrieval the real page did not orphan and force 2 pushed the result the
+other way. The chunk-level `test_answer_span_effect` stays valid as a unit test of the
+matcher's one-chunk rule on a constructed page — it is **not** a claim about the Wyatt corpus.
+
+**Bridge to RQ1.** Force 2 (dense embedding dilution on multi-record chunks) is exactly what
+**hybrid retrieval (RQ1)** should fix: BM25 matches `CPCCBC4001` lexically regardless of
+mean-pooling geometry, so it should rescue the whole-record chunk that dense retrieval buries.
+The chunking sub-question is answered and hands off to the primary RQ.
+
+The retrieval spine, the answer-span metric, and the fingerprint-guarded harness are correct
+and valuable regardless of which config "won" — the apparatus is the deliverable; the finding
+is simply different from the draft. Chunking comparison **closed**.
+
+---
+
+## 2026-07-26 — The naive-chunking penalty is table-size-dependent (and answer-span measures it)
+
+> **Superseded by the measured entry above.** The "C0 hit / C5 miss" below was a *chunk-level*
+> result on a constructed fixture; it did **not** reproduce under live retrieval (force 2 —
+> see above). Kept for the reasoning path (why we built answer-span); read the corrected entry
+> for the actual C0-vs-C5 result.
+
+With `fixed` corrected to char-based (OD-13), the C0-vs-C5 picture *at the chunk level*
+resolved into what looked like a precise finding on a constructed severing fixture:
+
+- **Compact table (courses, 4 rows): survives char-fixed.** The whole flattened table fits
+  inside one ~400-char window, so a fee stays with its course name under both configs. The
+  two fee questions **tie** — C0 and C5 both retrieve the answer whole. *(This part held.)*
+- **Long table (fixture): the code and its operative phrase split across char-windows**, so
+  no single C5 chunk carried the whole unit while a C0 chunk did. **On the real Wyatt page
+  this did NOT reproduce** — the real record did not exceed one window, and force 2 dominated.
+
+**The (revised) contribution:** the naive-chunking penalty is not universal — chunk *integrity*
+only matters for records long enough to orphan, which Wyatt's tables at 400 chars do not
+reliably reach; and it is opposed by chunk *focus* (force 2). See the corrected entry above.
+
+**Measuring it required a new ruler.** Page-level relevance is blind to this (both configs
+return a chunk from the right page). So we added **answer-span relevance** (docs/06 §1.1): a
+chunk counts only if the answer's *usable unit* co-occurs in it. The `CPCCBC4001` case is the
+positive control (C0 answer-hit, C5 answer-miss); the fee cases are the negative controls
+(both hit). Components are authored blind — from the question and source page, never from what
+a config retrieved — or the metric would manufacture its own result. Answer-span is reported
+**alongside** page-level, never replacing it.
+
+---
+
+## 2026-07-26 — Why C0 ≈ C5, and the C5 redefinition (pre-harness diagnosis)
+
+Building toward the first real C0-vs-C5 comparison, C0 and C5 looked identical and we stopped
+to find out why **before** building the scoring harness on top. The chain of findings:
+
+- **Page-level relevance is blind to intra-page chunking damage.** Every chunk from a page
+  carries that page's `source_url`, and page-level match keys on `source_url` alone — so a
+  config that keeps a table whole and one that shreds it both "hit" the gold page. Confirmed
+  structurally; it is exactly the limitation docs/06 §1 already flags.
+- **The chunker keeps table rows atomic.** `_layout` renders each table row as one
+  pipe-joined line, and the (then) line-based `fixed` split on line *count*, so a row was
+  never cut — "Diploma of Business" and "$11,500" stayed together under both configs.
+- **The real crawler flattens the whole body — including the table — into a single-line
+  `page.text`** (`extract_main_text = _norm(body.get_text(" "))`). So even the structured
+  table's content reappears, flattened, in the prose text; any chunk carrying `page.text`
+  holds the full record. The earlier fixture misled us because its `text` omitted the table.
+- **Root cause: line-based `fixed` is degenerate on normalised text.** With `page.text` a
+  single line, "N lines" cannot fragment prose — one chunk for the whole page. That is not
+  the naive fixed-size baseline the literature and Appendix A describe.
+
+**Decision (OD-13):** redefine `C5 fixed` as **character-based** (hard `size`-char windows,
+no boundary respect), retire line-based `fixed`. This is a correctness fix to the baseline,
+not effect-hunting — **a second null under the corrected baseline is a valid finding.** The
+answer-span metric (a chunk is answer-relevant only if the answer's *usable unit* co-occurs
+in one chunk — e.g. course name + column header + figure) is designed and reviewed but **not
+built**: we do not build a ruler until the real chunks show there is an effect to measure.
+Next: re-run the real chunk dump under char-based C5 and report whatever it shows, including
+another null.
+
 
 First end-to-end number. One domain (Wyatt), one config (`C0-baseline`), dense retrieval
 only. **Real baseline: hit_rate 0.80, MRR 0.80 (n=5).** A deliberate spike, not the harness

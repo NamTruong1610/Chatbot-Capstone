@@ -23,6 +23,12 @@ dependencies = [
     "requests>=2.31,<3",
     "playwright>=1.40,<2",
     "langchain-text-splitters>=0.2,<1",
+    # Phase 3 (retrieval/store): the real vector store + embedder. Both are lazy-imported
+    # behind our own typed wrappers (store/vector.py, store/embedder.py), so unit tests that
+    # mock them do not need them installed, but they are core runtime deps now — not a spike
+    # extra — because the pipeline and the evaluation harness depend on them.
+    "qdrant-client>=1.10,<2",
+    "sentence-transformers>=2.5,<4",
 ]
 
 [project.optional-dependencies]
@@ -32,15 +38,6 @@ dev = [
     "mypy>=1.10,<2",
     "types-PyYAML>=6,<7",
     "types-requests>=2.31,<3",
-]
-
-# SPIKE extra — the thin vertical slice's runtime deps (embedding + Qdrant client). Kept
-# out of the core deps because they are heavy and the pure spike modules (chunking,
-# metrics) and their unit tests do not need them. Install with `pip install -e ".[dev,slice]"`
-# to run `python -m chatbot.spike.run`.
-slice = [
-    "qdrant-client>=1.7,<2",
-    "sentence-transformers>=2.5,<4",
 ]
 
 [project.scripts]

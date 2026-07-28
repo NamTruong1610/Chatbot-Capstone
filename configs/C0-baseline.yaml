@@ -33,7 +33,6 @@ overrides:
     strategy: typed
     size: 400
     overlap: 50
-    fixed_lines_per_chunk: 3
     table_handling: header_repeat
     heading_breadcrumb: true
     qa_pairing: true
