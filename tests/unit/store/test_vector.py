@@ -22,6 +22,7 @@ class FakeClient:
         self.last_query_filter: Any = None
         self.last_limit: int | None = None
         self.query_points_return: list[Any] = []
+        self.scroll_return: list[dict[str, Any]] = []
 
     def collection_exists(self, name: str) -> bool:
         return name in self.collections
@@ -45,6 +46,12 @@ class FakeClient:
         self.last_query_filter = kwargs["query_filter"]
         self.last_limit = kwargs["limit"]
         return SimpleNamespace(points=self.query_points_return)
+
+    def scroll(self, **kwargs: Any) -> Any:
+        # One page then exhausted (next offset None); records the filter for assertion.
+        self.last_scroll_filter: Any = kwargs["scroll_filter"]
+        points = [SimpleNamespace(payload=p) for p in self.scroll_return]
+        return points, None
 
 
 def _store(client: FakeClient, dims: int = 3) -> VectorStore:
@@ -101,3 +108,12 @@ def test_search_adds_access_level_filter_when_levels_given() -> None:
     )
     keys = {c.key for c in client.last_query_filter.must}
     assert keys == {"domain_id", "index_key", "access_level"}
+
+
+def test_iter_chunks_scrolls_the_partition_and_returns_payloads() -> None:
+    client = FakeClient()
+    client.scroll_return = [{"chunk_id": "a", "text": "t1"}, {"chunk_id": "b", "text": "t2"}]
+    payloads = _store(client).iter_chunks(domain_id="wyatt-edu", index_key="abc123")
+    assert payloads == client.scroll_return  # the BM25 corpus is the same points dense scores
+    keys = {c.key for c in client.last_scroll_filter.must}
+    assert keys == {"domain_id", "index_key"}
