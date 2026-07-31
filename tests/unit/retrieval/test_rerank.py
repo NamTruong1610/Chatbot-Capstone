@@ -8,31 +8,48 @@ proving dense/hybrid runs don't pay for weights (FR-RET-06).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
-from chatbot.config.loader import load_config
-from chatbot.retrieval import RETRIEVERS, build_retriever
 from chatbot.retrieval.hybrid import HybridRerankRetriever
 from chatbot.retrieval.rerank import build_reranker
-from chatbot.store.vector import Hit
+
+from chatbot.config.loader import load_config
+from chatbot.retrieval import RETRIEVERS
+from chatbot.store.vector import VectorStore
+
+
+def _chunk(cid: str, path: str, text: str) -> dict[str, str]:
+    return {
+        "chunk_id": cid,
+        "source_url": f"https://x/{path}",
+        "text": text,
+        "access_level": "public",
+    }
+
 
 _CORPUS = [
-    {"chunk_id": "near", "source_url": "https://x/a", "text": "building construction management overview", "access_level": "public"},
-    {"chunk_id": "unit", "source_url": "https://x/diploma-building-construction", "text": "CPCCBC4001 National Construction Code", "access_level": "public"},
-    {"chunk_id": "far", "source_url": "https://x/c", "text": "campus locations and contact details", "access_level": "public"},
+    _chunk("near", "a", "building construction management overview"),
+    _chunk("unit", "diploma-building-construction", "CPCCBC4001 National Construction Code"),
+    _chunk("far", "c", "campus locations and contact details"),
 ]
 
 
-class FakeStore:
+class FakeClient:
+    """Fused/dense order does NOT put unit first; scroll returns the full corpus."""
+
     def __init__(self) -> None:
-        self._by_id = {c["chunk_id"]: c for c in _CORPUS}
+        order = ["near", "far", "unit"]
+        by_id = {c["chunk_id"]: c for c in _CORPUS}
+        self._dense = [
+            SimpleNamespace(payload=by_id[cid], score=1.0 - i * 0.01) for i, cid in enumerate(order)
+        ]
 
-    def search(self, vector: list[float], *, top_k: int, **_: Any) -> list[Hit]:
-        order = ["near", "far", "unit"]  # dense/fused does NOT put unit first
-        return [Hit(payload=self._by_id[cid], score=1.0 - i * 0.01) for i, cid in enumerate(order[:top_k])]
+    def query_points(self, **kwargs: Any) -> Any:
+        return SimpleNamespace(points=self._dense[: kwargs["limit"]])
 
-    def iter_chunks(self, **_: Any) -> list[dict[str, Any]]:
-        return list(_CORPUS)
+    def scroll(self, **kwargs: Any) -> Any:
+        return [SimpleNamespace(payload=c) for c in _CORPUS], None
 
 
 class FakeEmbedder:
@@ -54,17 +71,17 @@ class FakeReranker:
         return [10.0 if "CPCCBC4001" in t else 0.0 for t in texts]
 
 
+def _store() -> VectorStore:
+    return VectorStore(load_config("C2-hybrid-rerank").store, dimensions=384, client=FakeClient())
+
+
 def test_hybrid_rerank_is_registered() -> None:
     assert "hybrid_rerank" in RETRIEVERS
-    cfg = load_config("C2-hybrid-rerank")
-    assert isinstance(
-        build_retriever(cfg, FakeStore(), FakeEmbedder()).__class__, type
-    )
 
 
 def test_reranker_reorders_fused_candidates_to_rank_one() -> None:
     cfg = load_config("C2-hybrid-rerank")
-    retriever = HybridRerankRetriever(cfg, FakeStore(), FakeEmbedder(), reranker=FakeReranker())
+    retriever = HybridRerankRetriever(cfg, _store(), FakeEmbedder(), reranker=FakeReranker())
     result = retriever.retrieve("What does unit CPCCBC4001 cover?", domain_id="wyatt-edu")
 
     assert result.chunks[0].payload["chunk_id"] == "unit"  # reranked to the top

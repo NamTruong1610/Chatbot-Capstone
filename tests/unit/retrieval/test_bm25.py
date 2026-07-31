@@ -7,13 +7,19 @@ embeds as a blurry match, BM25 ranks first — the mechanism RQ1's hybrid arm is
 
 from __future__ import annotations
 
-from chatbot.config.schema import Bm25Variant
 from chatbot.retrieval.bm25 import BM25Index
 from chatbot.retrieval.fusion import reciprocal_rank_fusion
 
+from chatbot.config.schema import Bm25Variant
+
 
 def _chunk(cid: str, text: str) -> dict[str, str]:
-    return {"chunk_id": cid, "source_url": f"https://x/{cid}", "text": text, "access_level": "public"}
+    return {
+        "chunk_id": cid,
+        "source_url": f"https://x/{cid}",
+        "text": text,
+        "access_level": "public",
+    }
 
 
 def test_bm25_ranks_exact_code_token_first() -> None:
