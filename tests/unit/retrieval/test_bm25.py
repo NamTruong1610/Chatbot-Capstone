@@ -7,10 +7,9 @@ embeds as a blurry match, BM25 ranks first — the mechanism RQ1's hybrid arm is
 
 from __future__ import annotations
 
+from chatbot.config.schema import Bm25Variant
 from chatbot.retrieval.bm25 import BM25Index
 from chatbot.retrieval.fusion import reciprocal_rank_fusion
-
-from chatbot.config.schema import Bm25Variant
 
 
 def _chunk(cid: str, text: str) -> dict[str, str]:
@@ -42,9 +41,12 @@ def test_bm25_variant_plus_is_selectable_and_deterministic() -> None:
     assert first == second  # determinism (CLAUDE.md rule 3)
 
 
-def test_rrf_lifts_a_chunk_ranked_low_in_one_arm_but_high_in_the_other() -> None:
-    # dense buries "unit" (rank 3), BM25 ranks it first — fusion should surface it near the top.
-    dense = ["about", "fee", "unit"]
-    sparse = ["unit", "fee", "about"]
+def test_rrf_lifts_a_chunk_present_in_both_arms_over_single_arm_leaders() -> None:
+    # "unit" is buried at rank 3 in dense and rank 1 in sparse; the distractors each appear in
+    # only ONE arm. Appearing in BOTH lists must beat leading exactly one — even from rank 3.
+    dense = ["d1", "d2", "unit"]  # unit low here
+    sparse = ["unit", "s1", "s2"]  # unit top here; s* disjoint from d*
     fused = reciprocal_rank_fusion([dense, sparse], rrf_k=60)
-    assert fused[0] == "unit"  # 1/(60+3)+1/(60+1) beats fee's 1/(60+2)+1/(60+2)
+    # unit: 1/(60+3)+1/(60+1) = 0.03227 > d1 (dense-rank-1 only) = 1/61 = 0.01639
+    assert fused[0] == "unit"
+    assert fused.index("unit") < fused.index("d1")  # not a tie: strictly above the dense leader
