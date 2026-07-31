@@ -12,12 +12,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from chatbot.retrieval.hybrid import HybridRetriever
-
 from chatbot.config.loader import load_config
 from chatbot.evaluation.metrics import answer_hit_at_k
 from chatbot.retrieval import RETRIEVERS, build_retriever
 from chatbot.retrieval.dense import DenseRetriever
+from chatbot.retrieval.hybrid import HybridRetriever
 from chatbot.store.vector import VectorStore
 
 # The unit chunk is the only one carrying BOTH answer components in one place.

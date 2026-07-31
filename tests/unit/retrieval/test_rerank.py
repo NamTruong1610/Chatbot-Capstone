@@ -11,11 +11,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from chatbot.retrieval.hybrid import HybridRerankRetriever
 from chatbot.retrieval.rerank import build_reranker
 
 from chatbot.config.loader import load_config
 from chatbot.retrieval import RETRIEVERS
+from chatbot.retrieval.hybrid import HybridRerankRetriever
 from chatbot.store.vector import VectorStore
 
 
