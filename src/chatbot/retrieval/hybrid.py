@@ -11,6 +11,7 @@ records each arm's rank on every returned chunk (FR-RET-07). No branching lives 
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any
 
 from chatbot.config.schema import Fusion, ResolvedConfig
@@ -21,6 +22,7 @@ from chatbot.retrieval.base import (
 )
 from chatbot.retrieval.bm25 import BM25Index
 from chatbot.retrieval.fusion import rrf_scores
+from chatbot.retrieval.rerank import RerankScorer, build_reranker
 from chatbot.store.embedder import TextEmbedder
 from chatbot.store.vector import VectorStore
 
@@ -109,5 +111,61 @@ class HybridRetriever:
         start = time.perf_counter()
         fused = self._fuse(query, domain_id=domain_id, allowed_levels=allowed_levels)
         top = fused[: self._cfg.retrieval.top_k]
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        return RetrievalResult(chunks=top, latency_ms=latency_ms)
+
+
+@register_retriever("hybrid_rerank")
+class HybridRerankRetriever(HybridRetriever):
+    """RQ1 arm 3: hybrid fusion, then a cross-encoder re-scores the fused candidates.
+
+    Composition is strict: the reranker re-scores C1's *fused* candidate list (top candidate_k),
+    never the raw dense list — C2 is hybrid **plus** rerank. The reranker is injected for tests
+    and otherwise built lazily on first use, so importing/constructing this class does not load
+    cross-encoder weights until a query actually arrives (FR-RET-06).
+    """
+
+    def __init__(
+        self,
+        cfg: ResolvedConfig,
+        store: VectorStore,
+        embedder: TextEmbedder,
+        *,
+        reranker: RerankScorer | None = None,
+    ) -> None:
+        super().__init__(cfg, store, embedder)
+        self._reranker = reranker
+        self._reranker_ready = reranker is not None  # injected → skip the lazy build
+
+    def _ensure_reranker(self) -> RerankScorer | None:
+        if not self._reranker_ready:
+            self._reranker = build_reranker(self._cfg)
+            self._reranker_ready = True
+        return self._reranker
+
+    def retrieve(
+        self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
+    ) -> RetrievalResult:
+        start = time.perf_counter()
+        fused = self._fuse(query, domain_id=domain_id, allowed_levels=allowed_levels)
+        candidates = fused[: self._cfg.retrieval.candidate_k]
+        reranker = self._ensure_reranker()
+        if reranker is None:
+            # No model configured — degrade to hybrid rather than silently mis-scoring.
+            top = candidates[: self._cfg.retrieval.top_k]
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            return RetrievalResult(chunks=top, latency_ms=latency_ms)
+
+        scores = reranker.score(query, [c.text for c in candidates])
+        rescored = [
+            replace(c, rerank_score=s) for c, s in zip(candidates, scores, strict=True)
+        ]
+        # Stable sort by rerank score: ties keep the fused order, so reranking only ever
+        # *reorders* on a real score difference (deterministic, CLAUDE.md rule 3).
+        rescored.sort(key=lambda c: c.rerank_score or 0.0, reverse=True)
+        top = [
+            replace(c, rank=rank, score=c.rerank_score or 0.0)
+            for rank, c in enumerate(rescored[: self._cfg.retrieval.top_k], start=1)
+        ]
         latency_ms = (time.perf_counter() - start) * 1000.0
         return RetrievalResult(chunks=top, latency_ms=latency_ms)

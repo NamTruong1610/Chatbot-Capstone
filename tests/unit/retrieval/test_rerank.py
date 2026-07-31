@@ -11,12 +11,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from chatbot.retrieval.rerank import build_reranker
-
 from chatbot.config.loader import load_config
 from chatbot.retrieval import RETRIEVERS
-from chatbot.retrieval.hybrid import HybridRerankRetriever
+from chatbot.retrieval.hybrid import HybridRerankRetriever, HybridRetriever
+from chatbot.retrieval.rerank import build_reranker
 from chatbot.store.vector import VectorStore
+
+_QUERY = "What does unit CPCCBC4001 cover?"
 
 
 def _chunk(cid: str, path: str, text: str) -> dict[str, str]:
@@ -79,16 +80,28 @@ def test_hybrid_rerank_is_registered() -> None:
     assert "hybrid_rerank" in RETRIEVERS
 
 
-def test_reranker_reorders_fused_candidates_to_rank_one() -> None:
+def test_reranker_promotes_a_lower_ranked_more_relevant_chunk_to_rank_one() -> None:
+    # Baseline — hybrid fusion alone does NOT rank the answer-bearing chunk first: "near"
+    # (a topical-but-empty neighbour) outranks "unit" on RRF. So the reorder below is real,
+    # not a fused list that already had "unit" on top.
+    hybrid = HybridRetriever(load_config("C1-hybrid"), _store(), FakeEmbedder())
+    hyb = hybrid.retrieve(_QUERY, domain_id="wyatt-edu")
+    assert hyb.chunks[0].payload["chunk_id"] == "near"  # fused rank 1 is the wrong chunk
+    unit_fused_rank = next(c.rank for c in hyb.chunks if c.payload["chunk_id"] == "unit")
+    assert unit_fused_rank > 1  # the relevant chunk is buried below "near" in fusion
+
+    # Rerank — the cross-encoder scores "unit" highest, moving it from fused rank 2 to rank 1.
     cfg = load_config("C2-hybrid-rerank")
-    retriever = HybridRerankRetriever(cfg, _store(), FakeEmbedder(), reranker=FakeReranker())
-    result = retriever.retrieve("What does unit CPCCBC4001 cover?", domain_id="wyatt-edu")
+    reranked = HybridRerankRetriever(
+        cfg, _store(), FakeEmbedder(), reranker=FakeReranker()
+    ).retrieve(_QUERY, domain_id="wyatt-edu")
+    assert reranked.chunks[0].payload["chunk_id"] == "unit"  # promoted to the top by rerank
+    assert reranked.chunks[0].rank == 1
+    assert reranked.chunks[0].rerank_score == 10.0  # in-memory debug field populated
 
-    assert result.chunks[0].payload["chunk_id"] == "unit"  # reranked to the top
-    assert result.chunks[0].rank == 1
-    assert result.chunks[0].rerank_score == 10.0  # in-memory debug field populated
 
-
-def test_build_reranker_is_none_without_a_model() -> None:
-    # C0 declares no reranker_model → no weights loaded (FR-RET-06).
+def test_build_reranker_is_none_for_dense_and_hybrid_configs() -> None:
+    # C0 (dense) and C1 (hybrid) declare no reranker_model → build_reranker loads no weights,
+    # so neither path can pay the cross-encoder cost (FR-RET-06 lazy).
     assert build_reranker(load_config("C0-baseline")) is None
+    assert build_reranker(load_config("C1-hybrid")) is None
