@@ -140,10 +140,26 @@ def write_results(
     return out
 
 
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
 def aggregate(rows: list[dict[str, Any]]) -> dict[str, float | int]:
-    """Means over the retrieval-scored cases; answer-span mean over cases with a usable unit."""
+    """Means over the retrieval-scored cases; answer-span mean over cases with a usable unit.
+
+    Latency is aggregated over every case where retrieval actually ran (latency_ms not None),
+    reported as mean AND median — RQ1 is accuracy vs latency, and the reranker's tail cost
+    (FR-RET-08) shows up in the mean more than the median, so both matter.
+    """
     scored = [r for r in rows if r["scored_as"] == "retrieval"]
     answer_scored = [r for r in scored if r["answer_hit_at_k"] is not None]
+    latencies = [r["latency_ms"] for r in rows if r.get("latency_ms") is not None]
 
     def mean(key: str, subset: list[dict[str, Any]]) -> float:
         vals = [r[key] for r in subset if r[key] is not None]
@@ -157,4 +173,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, float | int]:
         "mrr": mean("mrr", scored),
         "precision_at_k": mean("precision_at_k", scored),
         "answer_hit_at_k": mean("answer_hit_at_k", answer_scored),
+        "n_latency": len(latencies),
+        "mean_latency_ms": sum(latencies) / len(latencies) if latencies else 0.0,
+        "median_latency_ms": _median(latencies),
     }

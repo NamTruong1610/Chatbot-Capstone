@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from chatbot.config.loader import load_config
-from chatbot.evaluation.runner import run_config, score_case
+from chatbot.evaluation.runner import aggregate, run_config, score_case
 from chatbot.evaluation.testset import GoldenCase
 from chatbot.retrieval.base import RetrievalResult, RetrievedChunk
 
@@ -78,3 +80,23 @@ def test_run_config_emits_stamped_rows() -> None:
     assert row["git_sha"] == "abc"
     assert row["hit_rate"] == 1.0 and row["answer_hit_at_k"] == 1.0
     assert row["role"] == "admin"  # label-but-don't-filter
+
+
+def test_aggregate_reports_mean_and_median_latency_over_retrieved_cases() -> None:
+    # Latency is aggregated only over cases where retrieval ran (abstention rows carry None).
+    rows: list[dict[str, Any]] = [
+        {"scored_as": "retrieval", "hit_rate": 1.0, "recall_at_k": 1.0, "mrr": 1.0,
+         "precision_at_k": 0.2, "answer_hit_at_k": 1.0, "latency_ms": 10.0},
+        {"scored_as": "retrieval", "hit_rate": 0.0, "recall_at_k": 0.0, "mrr": 0.0,
+         "precision_at_k": 0.0, "answer_hit_at_k": 0.0, "latency_ms": 30.0},
+        {"scored_as": "retrieval", "hit_rate": 1.0, "recall_at_k": 1.0, "mrr": 0.5,
+         "precision_at_k": 0.2, "answer_hit_at_k": None, "latency_ms": 50.0},
+        {"scored_as": "abstention", "hit_rate": None, "recall_at_k": None, "mrr": None,
+         "precision_at_k": None, "answer_hit_at_k": None, "latency_ms": None},
+    ]
+    agg = aggregate(rows)
+    assert agg["n_retrieval"] == 3
+    assert agg["n_answer_scored"] == 2  # the None answer_hit row is excluded
+    assert agg["n_latency"] == 3  # abstention row's None latency excluded
+    assert agg["mean_latency_ms"] == 30.0  # (10+30+50)/3
+    assert agg["median_latency_ms"] == 30.0

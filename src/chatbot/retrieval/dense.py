@@ -32,8 +32,11 @@ class DenseRetriever:
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
     ) -> RetrievalResult:
-        query_vector = self._embedder.encode_one(query)
+        # Bracket the whole retrieval (embed + search), so dense latency is comparable to
+        # hybrid/rerank, which time embed + search + fusion (+ rerank). RQ1 is accuracy vs
+        # latency, so the arms must measure the same span (FR-RET-08).
         start = time.perf_counter()
+        query_vector = self._embedder.encode_one(query)
         hits = self._store.search(
             query_vector,
             top_k=self._cfg.retrieval.top_k,

@@ -137,14 +137,21 @@ def _cmd_run(args: argparse.Namespace) -> int:
             continue
         ah = r["answer_hit_at_k"]
         ah_s = "  -" if ah is None else f"{ah:>3.0f}"
+        lat = r["latency_ms"]
+        lat_s = "     -" if lat is None else f"{lat:6.1f}"
         print(
             f"  case {r['case_id']:<2} page_hit={r['hit_rate']:.0f} answer_hit={ah_s} "
-            f"P@k={r['precision_at_k']:.2f} R@k={r['recall_at_k']:.2f} MRR={r['mrr']:.2f}"
+            f"P@k={r['precision_at_k']:.2f} R@k={r['recall_at_k']:.2f} MRR={r['mrr']:.2f} "
+            f"lat={lat_s}ms"
         )
     print(
         f"\naggregate: page hit_rate={agg['hit_rate']:.3f} recall={agg['recall_at_k']:.3f} "
         f"MRR={agg['mrr']:.3f}  |  answer_hit_rate={agg['answer_hit_at_k']:.3f} "
         f"(n_retrieval={agg['n_retrieval']}, n_answer_scored={agg['n_answer_scored']})"
+    )
+    print(
+        f"latency: mean={agg['mean_latency_ms']:.1f}ms median={agg['median_latency_ms']:.1f}ms "
+        f"(n={agg['n_latency']})"
     )
     return 0
 
