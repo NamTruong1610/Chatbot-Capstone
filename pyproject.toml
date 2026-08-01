@@ -35,6 +35,9 @@ dependencies = [
     # Generation (Phase 5): transport to the OpenAI-compatible LLM endpoint (Ollama), confined
     # to generation/client.py — no provider abstraction beyond a base_url (docs/04 §8).
     "httpx>=0.27,<1",
+    # Serving (Phase 5): the demonstrable chat endpoint (FR-API). FastAPI app + uvicorn runner.
+    "fastapi>=0.110,<1",
+    "uvicorn>=0.27,<1",
 ]
 
 [project.optional-dependencies]
