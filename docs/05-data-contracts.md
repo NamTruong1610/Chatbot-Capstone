@@ -203,13 +203,22 @@ an authored single-place answer.
 `results/<timestamp>-<config_id>/generation.csv`
 
 ```
-run_id, config_id, config_hash, git_sha, timestamp,
+config_id, config_hash, git_sha, timestamp,
 domain_id, case_id, question_type, access_level, role,
 question, expected_answer, generated_answer,
 should_abstain, did_abstain, abstention_correct,
+fact_contained,                                     # interim grounding proxy (below); null if unchecked
 n_sources, generation_latency_ms,
 faithfulness, answer_relevancy, context_precision   # RAGAS, null if disabled
 ```
+
+`abstention_correct` is `should_abstain == did_abstain` (docs/06 §3). `fact_contained` is the
+**interim grounding proxy** (OD-14): for an *answered* case with an authored `answer_terms`
+unit, whether the generated answer contains that unit (`metrics.is_answer_relevant` — the same
+ruler as retrieval answer-span). It is **null** when the case abstained or has no unit. It checks
+fact **containment, not answer quality**; it stands in for the RAGAS columns until those land.
+(`run_id` from earlier drafts is not emitted — run identity is the timestamped dir + `run.json`,
+as with §5.1.)
 
 ### 5.3 Summaries
 
