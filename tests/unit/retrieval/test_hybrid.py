@@ -109,3 +109,25 @@ def test_hybrid_pulls_candidate_k_from_the_dense_arm() -> None:
     store = VectorStore(cfg.store, dimensions=384, client=client)
     HybridRetriever(cfg, store, FakeEmbedder()).retrieve(_QUERY, domain_id="wyatt-edu")
     assert client.search_limit == cfg.retrieval.candidate_k == 30
+
+
+def test_warm_prebuilds_bm25_so_the_first_query_does_not_scroll() -> None:
+    # warm() pulls the BM25 corpus once (before the timed loop); the query then reuses it, so the
+    # one-time scroll + index build is excluded from per-query latency (FR-RET-08).
+    cfg = load_config("C1-hybrid")
+    client = FakeClient()
+    scrolls = {"n": 0}
+    inner = client.scroll
+
+    def counting(**kw: Any) -> Any:
+        scrolls["n"] += 1
+        return inner(**kw)
+
+    client.scroll = counting  # type: ignore[method-assign]
+    store = VectorStore(cfg.store, dimensions=384, client=client)
+    r = HybridRetriever(cfg, store, FakeEmbedder())
+
+    r.warm(domain_id="wyatt-edu")
+    assert scrolls["n"] == 1  # BM25 corpus pulled during warm
+    r.retrieve(_QUERY, domain_id="wyatt-edu")
+    assert scrolls["n"] == 1  # query reused the warmed index — no second scroll

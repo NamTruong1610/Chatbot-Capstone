@@ -67,6 +67,16 @@ class Retriever(Protocol):
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
     ) -> RetrievalResult: ...
 
+    def warm(self, *, domain_id: str) -> None:
+        """Pre-build lazily-loaded heavy state (models, indexes) before any timed query.
+
+        Called once before the scoring loop so a one-time cost (a cross-encoder model load, a
+        BM25 corpus scroll) does not land inside the first query's measured latency — symmetric
+        with the embedder, which is loaded at build time (FR-RET-08). Idempotent and optional:
+        ``retrieve`` still lazy-builds if ``warm`` was never called.
+        """
+        ...
+
 
 RETRIEVERS: dict[str, type[Retriever]] = {}
 

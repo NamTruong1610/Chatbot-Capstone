@@ -76,6 +76,9 @@ def run_config(
     k = cfg.retrieval.top_k
     config_hash = cfg.config_hash()
     timestamp = datetime.now(UTC).isoformat()
+    # Warm lazily-loaded heavy state (cross-encoder, BM25 index) before timing any query, so a
+    # one-time model load does not inflate the first case's latency (FR-RET-08). No-op for dense.
+    retriever.warm(domain_id=domain_id)
     rows: list[dict[str, Any]] = []
     for i, case in enumerate(cases):
         if _is_abstention(case):

@@ -29,6 +29,10 @@ class DenseRetriever:
         self._embedder = embedder
         self._index_key = cfg.index_key()
 
+    def warm(self, *, domain_id: str) -> None:
+        """No-op: the embedder is loaded at build time (before the timed loop); nothing is lazy."""
+        return None
+
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
     ) -> RetrievalResult:

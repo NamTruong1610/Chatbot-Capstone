@@ -105,3 +105,23 @@ def test_build_reranker_is_none_for_dense_and_hybrid_configs() -> None:
     # so neither path can pay the cross-encoder cost (FR-RET-06 lazy).
     assert build_reranker(load_config("C0-baseline")) is None
     assert build_reranker(load_config("C1-hybrid")) is None
+
+
+def test_warm_loads_the_cross_encoder_before_queries_not_during(monkeypatch: Any) -> None:
+    # The case-0 cold-start fix: warm() builds the reranker up front, so retrieve() never pays the
+    # one-time model load. Monkeypatch build_reranker to avoid real weights and count the load.
+    import chatbot.retrieval.hybrid as hybrid_mod
+
+    builds = {"n": 0}
+
+    def fake_build(cfg: Any) -> FakeReranker:
+        builds["n"] += 1
+        return FakeReranker()
+
+    monkeypatch.setattr(hybrid_mod, "build_reranker", fake_build)
+    r = HybridRerankRetriever(load_config("C2-hybrid-rerank"), _store(), FakeEmbedder())
+
+    r.warm(domain_id="wyatt-edu")
+    assert builds["n"] == 1  # cross-encoder loaded during warm (outside per-query timing)
+    r.retrieve("What does unit CPCCBC4001 cover?", domain_id="wyatt-edu")
+    assert builds["n"] == 1  # not rebuilt on the query

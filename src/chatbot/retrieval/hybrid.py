@@ -44,6 +44,12 @@ class HybridRetriever:
             self._bm25 = BM25Index(chunks, variant=self._cfg.retrieval.bm25_variant)
         return self._bm25
 
+    def warm(self, *, domain_id: str) -> None:
+        """Pre-build the BM25 index so the first query's latency excludes the corpus scroll +
+        index build (FR-RET-08). allowed_levels=None matches this phase's label-but-don't-filter
+        posture; RQ2 access filtering will revisit per-level BM25 caching."""
+        self._ensure_bm25(domain_id=domain_id, allowed_levels=None)
+
     def _fuse(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None
     ) -> list[RetrievedChunk]:
@@ -142,6 +148,14 @@ class HybridRerankRetriever(HybridRetriever):
             self._reranker = build_reranker(self._cfg)
             self._reranker_ready = True
         return self._reranker
+
+    def warm(self, *, domain_id: str) -> None:
+        """Pre-build BM25 (via super) AND load the cross-encoder before the timed loop, so the
+        one-time model load does not pollute the first query's latency (the case-0 cold-start).
+        FR-RET-06 holds: only the hybrid_rerank retriever is ever constructed, so dense/hybrid
+        never build a reranker — warming here changes *when*, within C2, not *whether*."""
+        super().warm(domain_id=domain_id)
+        self._ensure_reranker()
 
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None

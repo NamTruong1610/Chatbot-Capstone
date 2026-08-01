@@ -20,6 +20,10 @@ def _chunk(url: str, text: str) -> RetrievedChunk:
 class FakeRetriever:
     def __init__(self, result: RetrievalResult) -> None:
         self._result = result
+        self.warmed = False
+
+    def warm(self, *, domain_id: str) -> None:
+        self.warmed = True
 
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
@@ -71,9 +75,11 @@ def test_run_config_emits_stamped_rows() -> None:
         chunks=[_chunk("https://wyatt.nsw.edu.au/courses", "Diploma of Business $11,500")],
         latency_ms=1.5,
     )
+    retriever = FakeRetriever(result)
     run = run_config(
-        cfg, domain_id="wyatt-edu", cases=cases, retriever=FakeRetriever(result), git_sha="abc"
+        cfg, domain_id="wyatt-edu", cases=cases, retriever=retriever, git_sha="abc"
     )
+    assert retriever.warmed  # run_config warms before the timed loop (FR-RET-08)
     assert run.config_id == "C0-baseline"
     (row,) = run.rows
     assert row["config_hash"] == cfg.config_hash()
