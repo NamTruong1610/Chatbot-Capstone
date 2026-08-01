@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from chatbot.generation.prompts import PromptError, load_prompt
 
 from chatbot.config.schema import PromptVariant
+from chatbot.generation.prompts import PromptError, load_prompt
 
 ABSTENTION = "I do not have that information. Please contact us directly."
 

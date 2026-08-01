@@ -12,9 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from chatbot.generation.service import GenerationResult, build_generation_service
-
 from chatbot.config.loader import load_config
+from chatbot.generation.service import GenerationResult, build_generation_service
 from chatbot.retrieval.base import RetrievedChunk
 
 ABSTENTION = "I do not have that information. Please contact us directly."
