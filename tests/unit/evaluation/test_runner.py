@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from chatbot.config.loader import load_config
-from chatbot.evaluation.runner import run_config, score_case
+from chatbot.evaluation.runner import aggregate, run_config, score_case
 from chatbot.evaluation.testset import GoldenCase
 from chatbot.retrieval.base import RetrievalResult, RetrievedChunk
 
@@ -18,6 +20,10 @@ def _chunk(url: str, text: str) -> RetrievedChunk:
 class FakeRetriever:
     def __init__(self, result: RetrievalResult) -> None:
         self._result = result
+        self.warmed = False
+
+    def warm(self, *, domain_id: str) -> None:
+        self.warmed = True
 
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
@@ -69,12 +75,34 @@ def test_run_config_emits_stamped_rows() -> None:
         chunks=[_chunk("https://wyatt.nsw.edu.au/courses", "Diploma of Business $11,500")],
         latency_ms=1.5,
     )
+    retriever = FakeRetriever(result)
     run = run_config(
-        cfg, domain_id="wyatt-edu", cases=cases, retriever=FakeRetriever(result), git_sha="abc"
+        cfg, domain_id="wyatt-edu", cases=cases, retriever=retriever, git_sha="abc"
     )
+    assert retriever.warmed  # run_config warms before the timed loop (FR-RET-08)
     assert run.config_id == "C0-baseline"
     (row,) = run.rows
     assert row["config_hash"] == cfg.config_hash()
     assert row["git_sha"] == "abc"
     assert row["hit_rate"] == 1.0 and row["answer_hit_at_k"] == 1.0
     assert row["role"] == "admin"  # label-but-don't-filter
+
+
+def test_aggregate_reports_mean_and_median_latency_over_retrieved_cases() -> None:
+    # Latency is aggregated only over cases where retrieval ran (abstention rows carry None).
+    rows: list[dict[str, Any]] = [
+        {"scored_as": "retrieval", "hit_rate": 1.0, "recall_at_k": 1.0, "mrr": 1.0,
+         "precision_at_k": 0.2, "answer_hit_at_k": 1.0, "latency_ms": 10.0},
+        {"scored_as": "retrieval", "hit_rate": 0.0, "recall_at_k": 0.0, "mrr": 0.0,
+         "precision_at_k": 0.0, "answer_hit_at_k": 0.0, "latency_ms": 30.0},
+        {"scored_as": "retrieval", "hit_rate": 1.0, "recall_at_k": 1.0, "mrr": 0.5,
+         "precision_at_k": 0.2, "answer_hit_at_k": None, "latency_ms": 50.0},
+        {"scored_as": "abstention", "hit_rate": None, "recall_at_k": None, "mrr": None,
+         "precision_at_k": None, "answer_hit_at_k": None, "latency_ms": None},
+    ]
+    agg = aggregate(rows)
+    assert agg["n_retrieval"] == 3
+    assert agg["n_answer_scored"] == 2  # the None answer_hit row is excluded
+    assert agg["n_latency"] == 3  # abstention row's None latency excluded
+    assert agg["mean_latency_ms"] == 30.0  # (10+30+50)/3
+    assert agg["median_latency_ms"] == 30.0

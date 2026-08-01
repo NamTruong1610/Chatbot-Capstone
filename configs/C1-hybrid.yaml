@@ -1,0 +1,10 @@
+id: C1-hybrid
+extends: C0-baseline
+description: >
+  Fuses a lexical BM25 arm with dense retrieval (RRF). RQ1 arm 2 — isolates the effect of
+  adding sparse retrieval before any reranking. The manipulation is exactly the one key
+  below; verify with `python -m chatbot.config diff C0-baseline C1-hybrid`.
+rq: [1]
+overrides:
+  retrieval:
+    mode: hybrid

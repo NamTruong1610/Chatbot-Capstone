@@ -29,6 +29,9 @@ dependencies = [
     # extra — because the pipeline and the evaluation harness depend on them.
     "qdrant-client>=1.10,<2",
     "sentence-transformers>=2.5,<4",
+    # RQ1 hybrid arm: the lexical BM25 index fused with dense (FR-RET-02). Pure-Python, both
+    # okapi/plus variants; used only inside retrieval/bm25.py behind our own typed wrapper.
+    "rank-bm25>=0.2,<1",
 ]
 
 [project.optional-dependencies]
@@ -67,7 +70,9 @@ files = ["src", "tests"]
 # (qdrant-client, sentence-transformers) are not installed in the lint/test env at all.
 # All are used behind our own typed wrappers, so silence missing-import without loosening
 # our code.
-module = ["yaml", "bs4", "qdrant_client", "qdrant_client.*", "sentence_transformers"]
+module = [
+    "yaml", "bs4", "qdrant_client", "qdrant_client.*", "sentence_transformers", "rank_bm25"
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

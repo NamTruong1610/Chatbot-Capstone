@@ -29,11 +29,18 @@ class DenseRetriever:
         self._embedder = embedder
         self._index_key = cfg.index_key()
 
+    def warm(self, *, domain_id: str) -> None:
+        """No-op: the embedder is loaded at build time (before the timed loop); nothing is lazy."""
+        return None
+
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
     ) -> RetrievalResult:
-        query_vector = self._embedder.encode_one(query)
+        # Bracket the whole retrieval (embed + search), so dense latency is comparable to
+        # hybrid/rerank, which time embed + search + fusion (+ rerank). RQ1 is accuracy vs
+        # latency, so the arms must measure the same span (FR-RET-08).
         start = time.perf_counter()
+        query_vector = self._embedder.encode_one(query)
         hits = self._store.search(
             query_vector,
             top_k=self._cfg.retrieval.top_k,

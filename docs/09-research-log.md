@@ -8,6 +8,74 @@ with a new one.
 
 ---
 
+## 2026-08-01 — RQ1 on Wyatt: hybrid alone regresses, rerank nets +1/17 at ~2.5× latency (MEASURED)
+
+The first real RQ1 comparison — dense (C0) vs hybrid (C1) vs hybrid+rerank (C2), same
+ingested index (shared `index_key`, no re-ingest), scored on the 21-case `wyatt_rq1.csv`
+(17 answer-scored; 3 out_of_scope + 1 null unit). **Answer-span is the finding; page-level did
+not separate the arms** (every arm returns a chunk from the gold page — the same blindness the
+chunking study flagged), so the numbers below are `answer_hit_at_k`, k=5.
+
+| config | mode | answer_hit_rate | per-query latency |
+|---|---|---|---|
+| C0-baseline | dense | **0.706** (12/17) | ~54 ms |
+| C1-hybrid | dense + BM25 (RRF) | **0.588** (10/17) | ~43 ms |
+| C2-hybrid-rerank | hybrid + cross-encoder | **0.765** (13/17) | ~122 ms (median) |
+
+The aggregate hides the real story; at n=17 the per-case movement is the finding:
+
+- **Hybrid alone REGRESSES.** C1 broke exactly two cases that dense got — **case 2** (Advanced
+  Diploma duration) and **case 15** (phone number), both 1→0 — and gained none. That pair *is*
+  the entire 0.706→0.588 drop. BM25's exact-token matching pulled lexically-similar but
+  answer-empty chunks into the fused top-5, displacing the dense hits. On a ~530-chunk SME
+  corpus the sparse arm adds more noise than signal.
+- **Rerank recovers the damage and nets one genuinely new question.** C2 restored cases 2 and
+  15 (the cross-encoder re-scored the noise back down) **and** additionally fixed **case 1**
+  (Diploma of Business duration), which *both* dense and hybrid missed. So relative to C0 the
+  net gain is **+1/17 — a single question (case 1)** — and most of rerank's visible work is
+  undoing hybrid's own regression, not beating dense.
+- **The force-2 prediction is FALSIFIED.** The chunking entry below predicted BM25 would rescue
+  **case 8** (`CPCCBC4001`) where dense's mean-pooled vector buries the unit in a multi-record
+  chunk. On the real corpus **case 8 HIT under all three arms — dense already retrieved it** —
+  so the predicted table-rescue never fired. The force-2 mechanism is real in the constructed
+  fixture (`test_hybrid`) but did not manifest on Wyatt: the answer-bearing chunk was not
+  actually orphaned at retrieval time. Tested and disconfirmed; recorded as such, not buried.
+
+**Latency.** C2's per-query cost is ~122 ms median (mean 145 ms after the warm-up fix, commit
+`0a82dd5`, moved the one-time cross-encoder load out of the timed loop; the pre-fix mean of
+1669 ms was a case-0 cold-start artifact, not query cost). So rerank is **~2.5× dense** (54→122
+ms), not 30×. All arms are well under 150 ms — latency is not the deciding factor here; accuracy
+is, and the accuracy gain is one question.
+
+**Build decision — both defensible, neither compelling.** For a live SME chatbot: **rerank** is
+the best-accuracy arm and still sub-150 ms, or **dense** is simpler and cheaper at one question
+worse with no moving parts. **Hybrid-without-rerank is dominated — do not ship it**; on this
+corpus it strictly regresses dense. The pragmatic default is **dense**: the +1/17 rerank edge
+does not justify a cross-encoder dependency and 2.5× latency for most SME deployments.
+
+**Status: directional, NOT statistically significant.** n=17 answer-scored on one domain; a
+one- or two-question swing moves every aggregate. This is a witnessed pattern, not a result to
+generalise — RQ4 (does it hold across businesses?) is where significance would have to come
+from. Caveat: C0 here is "C0 minus workflows" (FR-WF unbuilt, LF-2), so absolute numbers are a
+floor; the *relative* comparison is unaffected (all three arms share the same index).
+
+**Apparatus verified before trusting the numbers.** Dispatch was confirmed to reach the right
+retriever per config (C0→dense, C1→hybrid, C2→hybrid_rerank), `index_key` is identical across
+the three (so C1/C2 genuinely reuse C0's index), and the BM25 arm demonstrably contributed —
+C1 ≠ C0 (it changed results, for the worse) is itself the proof the sparse arm ran. An earlier
+sweep re-ingested per config; harmless (same `index_key`, deterministic point ids) but the
+reason: `ingest` has no skip-on-existing guard — ingest C0 once, only *run* C1/C2. Logged as a
+usability gap, not a correctness one.
+
+**Contribution.** RQ1's answer on SME-scale data: **hybrid retrieval does not help and can
+hurt; reranking recovers hybrid's damage and adds marginal value over dense, at a latency cost
+that is real but small.** The force-2 hypothesis that motivated the hybrid arm held in
+principle but did not fire on this corpus. The deliverable — three switchable, registry-selected
+retrievers measured on the same index with a metric that sees intra-page answer placement — is
+sound regardless of which arm "won."
+
+---
+
 ## 2026-07-26 — C0 vs C5 on Wyatt: chunking is near-neutral, two opposing forces (MEASURED)
 
 The measured result from the committed harness — dense retrieval, `top_k=5`, answer-span

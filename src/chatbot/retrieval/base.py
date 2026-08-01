@@ -24,7 +24,13 @@ from chatbot.store.vector import VectorStore
 
 @dataclass(frozen=True)
 class RetrievedChunk:
-    """One retrieved chunk: identity, text, full payload, score, rank (FR-RET-07)."""
+    """One retrieved chunk: identity, text, full payload, score, rank (FR-RET-07).
+
+    ``score`` is the retriever's own ranking score (dense similarity, or fused RRF score for
+    hybrid); ``rank`` is its 1-based position in the returned list. The trailing fields are
+    per-arm diagnostics FR-RET-07 asks for — which arm found it and at what rank, the fused
+    score, the rerank score — kept in memory only (not yet columns in retrieval.csv). Left
+    ``None`` by arms that do not produce them (dense sets none of them)."""
 
     chunk_id: str
     source_url: str
@@ -33,6 +39,10 @@ class RetrievedChunk:
     rank: int
     access_level: str
     payload: dict[str, Any]
+    dense_rank: int | None = None
+    bm25_rank: int | None = None
+    fused_score: float | None = None
+    rerank_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +66,16 @@ class Retriever(Protocol):
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
     ) -> RetrievalResult: ...
+
+    def warm(self, *, domain_id: str) -> None:
+        """Pre-build lazily-loaded heavy state (models, indexes) before any timed query.
+
+        Called once before the scoring loop so a one-time cost (a cross-encoder model load, a
+        BM25 corpus scroll) does not land inside the first query's measured latency — symmetric
+        with the embedder, which is loaded at build time (FR-RET-08). Idempotent and optional:
+        ``retrieve`` still lazy-builds if ``warm`` was never called.
+        """
+        ...
 
 
 RETRIEVERS: dict[str, type[Retriever]] = {}

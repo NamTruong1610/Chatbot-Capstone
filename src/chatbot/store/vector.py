@@ -21,6 +21,7 @@ from typing import Any
 from chatbot.config.schema import StoreConfig
 
 _UPSERT_BATCH = 256  # FR-STORE-07: batch, never one-per-chunk nor one giant request.
+_SCROLL_PAGE = 256  # page size for iter_chunks (the BM25 corpus pull, FR-RET-02/09).
 
 # index_key partitions the shared collection, so it must be indexed alongside the
 # documented four (docs/05 §1) or every query scans the collection (FR-STORE-03 rationale).
@@ -140,6 +141,38 @@ class VectorStore:
             with_payload=True,
         )
         return [(Hit(payload=p.payload, score=float(p.score))) for p in response.points]
+
+    def iter_chunks(
+        self,
+        *,
+        domain_id: str,
+        index_key: str,
+        allowed_levels: Iterable[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Every chunk payload in one (domain_id, index_key), for the BM25 arm (FR-RET-02).
+
+        The sparse index is built from *these* points — the same ones dense retrieval scores —
+        so the two arms can never disagree about what is in the corpus or its access labels
+        (FR-RET-09). Paginated ``scroll`` so a large domain does not arrive in one response.
+        """
+        payloads: list[dict[str, Any]] = []
+        offset: Any = None
+        query_filter = self._partition_filter(
+            domain_id=domain_id, index_key=index_key, allowed_levels=allowed_levels
+        )
+        while True:
+            points, offset = self._client.scroll(
+                collection_name=self._collection,
+                scroll_filter=query_filter,
+                limit=_SCROLL_PAGE,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            payloads.extend(p.payload for p in points)
+            if offset is None:
+                break
+        return payloads
 
     def _partition_filter(
         self,
