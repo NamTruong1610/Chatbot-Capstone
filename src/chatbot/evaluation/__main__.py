@@ -19,9 +19,15 @@ import sys
 from pathlib import Path
 
 from chatbot.config.loader import load_config
+from chatbot.evaluation.generation_runner import (
+    aggregate_generation,
+    score_generation,
+    write_generation_results,
+)
 from chatbot.evaluation.runner import aggregate, run_config, write_results
 from chatbot.evaluation.testset import load_testset
 from chatbot.ingestion.pipeline import ingest, load_corpus
+from chatbot.pipeline import IndexNotReadyError, build_chat_pipeline
 from chatbot.retrieval import build_retriever
 from chatbot.store.embedder import build_embedder
 from chatbot.store.fingerprint import read_fingerprint
@@ -156,6 +162,70 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_chat_eval(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    try:
+        # Same compose the API serves; fingerprint guard fails fast here (FR-EVAL-11).
+        pipeline = build_chat_pipeline(cfg, args.domain)
+    except IndexNotReadyError as exc:
+        sys.stderr.write(f"error: {exc}\n")
+        return 1
+
+    cases = load_testset(args.testset)
+    results = score_generation(cases, pipeline)
+    agg = aggregate_generation(results)
+    run_meta = {
+        "config_id": cfg.id,
+        "config_hash": cfg.config_hash(),
+        "git_sha": _git_sha(),
+        "domain_id": args.domain,
+        "generation_model": cfg.generation.model,
+        "prompt_variant": cfg.generation.prompt_variant.value,
+        "temperature": cfg.generation.temperature,
+        "aggregate": agg,
+        "grounding_metric": "answer_terms containment (interim proxy; RAGAS deferred, OD-14)",
+    }
+    out = write_generation_results(
+        results, config_id=cfg.id, config_hash=cfg.config_hash(), git_sha=_git_sha(),
+        domain_id=args.domain, run_meta=run_meta,
+    )
+
+    print(f"\n=== {cfg.id} generation on {args.domain} ({cfg.generation.model}) -> {out} ===\n")
+    for r in results:
+        if r.should_abstain:
+            verdict = "REFUSED  ✓" if r.did_abstain else "ANSWERED ✗ HALLUCINATION"
+        elif r.did_abstain:
+            verdict = "REFUSED  ✗ false-abstention"
+        else:
+            verdict = "ANSWERED"
+        fact = "  - " if r.fact_contained is None else (" HIT" if r.fact_contained else "miss")
+        print(
+            f"case {r.case_id:<2} [{r.question_type:<14}] {verdict:<26} "
+            f"fact={fact} src={len(r.sources)} {r.latency_ms:6.0f}ms"
+        )
+        print(f"   Q: {r.question}")
+        print(f"   A: {' '.join(r.generated_answer.split())}\n")
+
+    print("--- aggregate ---")
+    print(
+        f"answerable={agg['n_answerable']}: answered={agg['answered']} "
+        f"(false-abstentions={agg['false_abstentions']})  |  "
+        f"grounding-correctness (fact contained) = {agg['grounding_correctness']:.3f} "
+        f"over {agg['n_fact_checkable']} checkable"
+    )
+    print(
+        f"out-of-scope={agg['n_out_of_scope']}: correct-refusals={agg['correct_refusals']} "
+        f"hallucinations={agg['hallucinations']}  |  refusal-accuracy = "
+        f"{agg['refusal_accuracy_out_of_scope']:.3f}"
+    )
+    print(
+        "\nnote: grounding-correctness checks fact CONTAINMENT (answer_terms present in the "
+        "answer), NOT answer quality or faithfulness. Read the answers above to judge quality; "
+        "a paraphrased refusal scores as a non-abstention by design (docs/06 §3). RAGAS deferred."
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m chatbot.evaluation")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -178,6 +248,12 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--domain", required=True)
     p_run.add_argument("--testset", required=True, type=_path)
     p_run.set_defaults(func=_cmd_run)
+
+    p_ce = sub.add_parser("chat-eval", help="run the full retrieve→generate pipeline + score it")
+    p_ce.add_argument("--config", required=True)
+    p_ce.add_argument("--domain", required=True)
+    p_ce.add_argument("--testset", required=True, type=_path)
+    p_ce.set_defaults(func=_cmd_chat_eval)
 
     args = parser.parse_args(argv)
     result: int = args.func(args)

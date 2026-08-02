@@ -160,6 +160,21 @@ the default sweep is retrieval-only.
 comparable across judge models, and a silent judge upgrade mid-project would invalidate
 every cross-configuration comparison. Pin it and do not change it after the first run.
 
+### 5.1 Interim grounding proxy (before RAGAS — OD-14)
+
+Until RAGAS is wired, the `chat-eval` harness reports a cheap, deterministic stand-in:
+**fact containment** — for an *answered* answerable case with an authored `answer_terms` unit,
+whether the generated answer contains that unit (`is_answer_relevant`, the retrieval answer-span
+ruler applied to the answer text). Stored as `fact_contained` (docs/05 §5.2).
+
+Its limit is explicit and must be stated wherever the number appears: it measures whether the
+**required fact is present**, not whether the answer is faithful, complete, or well-phrased. A
+verbose or partly-wrong answer that happens to contain the term passes; a correct paraphrase that
+avoids the literal term fails. It does not replace RAGAS faithfulness/answer_relevancy — it makes
+the automatable half measurable now, and the human reads the printed answers for quality. A
+paraphrased *refusal* scores as a non-abstention by design (§3), so it surfaces as a grounding
+miss / abstention failure rather than being hidden.
+
 ---
 
 ## 6. Comparison procedure

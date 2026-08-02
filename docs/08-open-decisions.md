@@ -326,6 +326,30 @@ docs/03 §2.2 and §3. No results existed when this changed, so no re-run is owe
 
 ---
 
+### OD-14 — Interim grounding metric: `answer_terms` containment, pending RAGAS
+
+**Status:** ☑ Decided · 2026-08-01
+
+**Decision.** The Phase-5 generation eval (`chat-eval`) scores grounding with a deterministic
+**fact-containment proxy** — for an answered case with an authored `answer_terms` unit, whether
+the generated answer contains that unit (`metrics.is_answer_relevant`, the retrieval answer-span
+ruler applied to the answer text), stored as `fact_contained` (docs/05 §5.2). RAGAS
+faithfulness/answer_relevancy (docs/06 §5) remain the target metric and are **deferred**, not
+replaced; their CSV columns stay null so the schema is stable when they land.
+
+**Rationale.** RAGAS costs an LLM judge call per question and needs a pinned judge model (OD-8),
+neither settled. The containment proxy reuses an already-validated, deterministic ruler and makes
+the automatable half — is the required fact present, did the model refuse when it should — usable
+now. Its limit is explicit (docs/06 §5.1): it measures fact **containment, not quality or
+faithfulness**, so the human reads the printed answers for quality. Recorded here rather than
+silently added because it is metric-adjacent (CLAUDE.md rule 5); it is a reported diagnostic, not
+a redefinition of the thesis's generation metrics.
+
+**Revisit when** RAGAS is wired (a later phase): populate the RAGAS columns, keep `fact_contained`
+alongside as the cheap cross-check.
+
+---
+
 ## Logged findings
 
 Deferred engineering findings from live crawls — not decisions, not fixed now; tracked so
@@ -380,3 +404,24 @@ not headings.** On the real Wyatt `/faq`, `qa_pairing` may therefore silently pr
 trusting the `qa` chunk_type on live data — if questions are `<dt>`/`<summary>`/accordion,
 QA pairing yields nothing. **Not fixed now:** robust detection needs its own adversarial
 fixture (questions as body lines, not headings) and a pass once the real FAQ shape is known.
+
+### LF-4 — Generation answer-QUALITY issues for a prompt-polish pass (Phase 5 chat-eval)
+
+The first end-to-end chat-eval (docs/09, 2026-08-01) confirmed grounding and refusal are
+**correct** — but surfaced answer-*quality* defects that are prompt-tunable, not pipeline bugs,
+and separate from the (correct) grounding/refusal behaviour:
+
+- **Invented specifics.** Case 0 ("what qualifications?") named degree levels Wyatt does not
+  offer — the model padded the grounded list with plausible-but-absent detail.
+- **Raw-chunk echo.** Case 10 returned near-verbatim retrieved chunk text instead of a phrased
+  answer.
+- **Citation-fragment leakage.** Bracketed markers (`[N]`) leak into prose awkwardly rather than
+  reading as clean citations.
+- **Citation-only non-answers.** Some answers (cases 15/16) returned essentially a citation
+  marker without stating the fact in words.
+
+**Fix path (a later prompt-polish pass, not blocking Phase 5 merge):** tune `prompts/strict_grounded.md`
+(discourage outside detail, require the fact be stated in prose, clean citation style) and
+re-run chat-eval, reading the answers. These are quality, not correctness — the pipeline grounds
+and refuses correctly today; RAGAS faithfulness/answer_relevancy (OD-14) will quantify quality
+when wired.

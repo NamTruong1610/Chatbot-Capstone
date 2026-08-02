@@ -8,6 +8,57 @@ with a new one.
 
 ---
 
+## 2026-08-01 — Generation on Wyatt: grounds + refuses correctly; the metric under-measures, and reading the answers caught the mislabels (MEASURED)
+
+First end-to-end chatbot run — `chat-eval` over `wyatt_rq1.csv` through the **same**
+`build_chat_pipeline` the API serves (C0-baseline, dense retrieval, llama3.2, `strict_grounded`,
+temperature 0.0). The headline is not a number; it is that the automated number was **wrong until
+a human read the answers against the source**.
+
+**Behaviour is correct.** Zero hallucinations. The one genuine out-of-scope question (ATAR — not
+applicable to VET, absent from the site) is **refused** with the exact abstention phrase;
+**refusal accuracy = 1.0**. The two hard cases are handled well:
+
+- **Source conflict resolved, not parroted.** The Diploma of Business fee reads $11,500 on the
+  courses table but $11,250 on the course page. The chatbot did not pick one blindly — it grounded
+  the reconciliation: **$11,500 = $11,250 tuition + $250 fee**. That is the RAG pipeline doing
+  exactly what it should with self-inconsistent source data.
+- **Partial information handled honestly.** "Is there a payment plan?" — the exact term is not on
+  the site, but related financial terms are. The chatbot **surfaced the deposit and administration
+  fee and declined to invent a payment plan** — the correct behaviour for a partial-information
+  query (case 19, now classified `factual_lookup`; see the ground-truth correction below).
+
+**The containment proxy is a floor, not the score. grounding-correctness (fact contained) =
+0.294** — and that number *under-measures* quality, badly. Focused, correct answers routinely omit
+the literal `answer_terms` the question already established (e.g. answering "52 weeks" without
+repeating "Diploma of Business") and score `fact=miss` while being right. The proxy checks fact
+**containment, not quality** (docs/06 §5.1, OD-14); it is worth reporting only as a floor, and the
+**printed answers are the real evidence** — which is why `chat-eval` prints every answer.
+
+**Methodological finding (the actual contribution).** The first automated run reported refusal
+accuracy 0.333 and three "hallucinations." Reading the model's answers against the crawl showed
+**all three were test-set mislabels, not model failures**: a bursary (partial scholarship) *is* on
+the site (case 18), and the case-19 financial terms *are* on `/enrolment`; only ATAR was truly
+out-of-scope. Correcting the ground truth moved refusal accuracy 0.333 → **1.0** with no change to
+the model. The metric alone would have recorded a hallucinating chatbot; the human read recovered
+the truth. This is the generation analogue of the RQ1 page-level-blindness lesson: **an automated
+grounding number is only trustworthy once someone has read the outputs against the source.** Human
+reading is not optional QA — it is what keeps the number honest.
+
+**Ground-truth correction (2026-08-01).** cases 18/19 reclassified out_of_scope→`factual_lookup`;
+`answer_terms` left empty (behaviour-scored answer-vs-refuse; quality read by human), so RQ1's
+answer-span set stays n=17 and its headline is unaffected (see the RQ1 note below). "bursary"
+appears on 9 pages — ambient, so it is not used as a containment term (the discriminating-keyword
+rule from the thin-slice findings).
+
+**Scope.** Answer *quality* issues (invented specifics, raw-chunk echo, citation-fragment leakage,
+citation-only non-answers) are real but separate from the grounding/refusal behaviour measured
+here; they are prompt-tunable and logged as LF-4 for a prompt-polish pass, not a pipeline defect.
+The deliverable — a working, config-driven chatbot endpoint plus a generation harness that scores
+refusal by cause and prints answers for human grounding-review — is done.
+
+---
+
 ## 2026-08-01 — RQ1 on Wyatt: hybrid alone regresses, rerank nets +1/17 at ~2.5× latency (MEASURED)
 
 The first real RQ1 comparison — dense (C0) vs hybrid (C1) vs hybrid+rerank (C2), same
@@ -58,6 +109,13 @@ one- or two-question swing moves every aggregate. This is a witnessed pattern, n
 generalise — RQ4 (does it hold across businesses?) is where significance would have to come
 from. Caveat: C0 here is "C0 minus workflows" (FR-WF unbuilt, LF-2), so absolute numbers are a
 floor; the *relative* comparison is unaffected (all three arms share the same index).
+
+> **Later correction (2026-08-01):** cases 18/19 were reclassified out_of_scope→factual_lookup
+> (see the generation entry above). `answer_terms` were left empty on both, so the RQ1
+> **answer-span** set stays n=17 and the headline numbers above are unchanged; only the RQ1
+> **page-level** aggregate predates the correction (those two cases now carry gold pages). RQ1
+> was **not** re-run — page-level did not separate the arms, so the correction does not change
+> what RQ1 concluded.
 
 **Apparatus verified before trusting the numbers.** Dispatch was confirmed to reach the right
 retriever per config (C0→dense, C1→hybrid, C2→hybrid_rerank), `index_key` is identical across
