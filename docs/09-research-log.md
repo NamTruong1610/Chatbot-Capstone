@@ -59,6 +59,13 @@ generalise — RQ4 (does it hold across businesses?) is where significance would
 from. Caveat: C0 here is "C0 minus workflows" (FR-WF unbuilt, LF-2), so absolute numbers are a
 floor; the *relative* comparison is unaffected (all three arms share the same index).
 
+> **Later correction (2026-08-01):** cases 18/19 were reclassified out_of_scope→factual_lookup
+> (see the generation entry above). `answer_terms` were left empty on both, so the RQ1
+> **answer-span** set stays n=17 and the headline numbers above are unchanged; only the RQ1
+> **page-level** aggregate predates the correction (those two cases now carry gold pages). RQ1
+> was **not** re-run — page-level did not separate the arms, so the correction does not change
+> what RQ1 concluded.
+
 **Apparatus verified before trusting the numbers.** Dispatch was confirmed to reach the right
 retriever per config (C0→dense, C1→hybrid, C2→hybrid_rerank), `index_key` is identical across
 the three (so C1/C2 genuinely reuse C0's index), and the BM25 arm demonstrably contributed —
