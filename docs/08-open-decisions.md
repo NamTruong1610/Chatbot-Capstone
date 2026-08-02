@@ -404,3 +404,24 @@ not headings.** On the real Wyatt `/faq`, `qa_pairing` may therefore silently pr
 trusting the `qa` chunk_type on live data — if questions are `<dt>`/`<summary>`/accordion,
 QA pairing yields nothing. **Not fixed now:** robust detection needs its own adversarial
 fixture (questions as body lines, not headings) and a pass once the real FAQ shape is known.
+
+### LF-4 — Generation answer-QUALITY issues for a prompt-polish pass (Phase 5 chat-eval)
+
+The first end-to-end chat-eval (docs/09, 2026-08-01) confirmed grounding and refusal are
+**correct** — but surfaced answer-*quality* defects that are prompt-tunable, not pipeline bugs,
+and separate from the (correct) grounding/refusal behaviour:
+
+- **Invented specifics.** Case 0 ("what qualifications?") named degree levels Wyatt does not
+  offer — the model padded the grounded list with plausible-but-absent detail.
+- **Raw-chunk echo.** Case 10 returned near-verbatim retrieved chunk text instead of a phrased
+  answer.
+- **Citation-fragment leakage.** Bracketed markers (`[N]`) leak into prose awkwardly rather than
+  reading as clean citations.
+- **Citation-only non-answers.** Some answers (cases 15/16) returned essentially a citation
+  marker without stating the fact in words.
+
+**Fix path (a later prompt-polish pass, not blocking Phase 5 merge):** tune `prompts/strict_grounded.md`
+(discourage outside detail, require the fact be stated in prose, clean citation style) and
+re-run chat-eval, reading the answers. These are quality, not correctness — the pipeline grounds
+and refuses correctly today; RAGAS faithfulness/answer_relevancy (OD-14) will quantify quality
+when wired.
