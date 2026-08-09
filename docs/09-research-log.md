@@ -8,6 +8,43 @@ with a new one.
 
 ---
 
+## 2026-08-02 — Prompt polish cleaned the answers (0.294→0.529); two retrieval-precision limits remain (MEASURED)
+
+A `strict_grounded`-only pass (LF-4) — no code, metric, or test-set change — fixed the answer
+*quality* defects the generation read surfaced, and moved the containment proxy without touching
+grounding/refusal:
+
+- **Cleaner answers, measurably.** Citation-marker leakage gone (clean prose throughout), raw
+  pipe-delimited chunk-dump gone (case 10), bare-citation non-answers fixed (cases 15/16 now state
+  the phone number / the year in words). **grounding-correctness 0.294 → 0.529** — the rise is
+  because answers now *state the fact in words* (so the containment ruler can see it), not because
+  retrieval changed. Refusal accuracy still **1.0**, **zero hallucinations**, and the case-19
+  partial-information hedge survived. Behaviour held; prose improved.
+- The jump also re-confirms the proxy's nature: it rewards the fact appearing in the text, which is
+  a genuine quality gain here — but it is still a floor (see the limits below, which it cannot
+  catch).
+
+**Known limitations — retrieval-precision, NOT prose (out of scope for a prompt pass).** Two
+answers are wrong because the model faithfully grounded in a **wrong-but-present** retrieved chunk:
+
+- **Case 0 (qualifications):** the answer still lists generic AQF degree levels
+  (Bachelor's / Advanced Diploma / …) Wyatt does not offer. A retrieved chunk contains a generic
+  **AQF framework**, and the model repeats it instead of naming Wyatt's four actual courses. The
+  prompt now forbids outside knowledge, so this is not invention — it is grounding in the wrong
+  chunk. Fix is retrieval precision (don't surface / don't rank the AQF-boilerplate chunk), not the
+  prompt.
+- **Case 17 (cost difference):** asked about the **Business** diploma, the answer used the
+  **Building & Construction** diploma's fee — the model grabbed the wrong course's figure from
+  present context. Again retrieval precision, not phrasing.
+
+Both are the same failure mode — **faithful grounding in the wrong retrieved context** — which is
+distinct from the (now-fixed) prose quality and from hallucination (the model is *not* making
+things up; it is repeating the wrong real chunk). It motivates retrieval-precision work
+(reranking/chunk-scoping) and is tracked as LF-5; not fixed in this pass. The chatbot's answers are
+otherwise clean and demo-ready.
+
+---
+
 ## 2026-08-01 — Generation on Wyatt: grounds + refuses correctly; the metric under-measures, and reading the answers caught the mislabels (MEASURED)
 
 First end-to-end chatbot run — `chat-eval` over `wyatt_rq1.csv` through the **same**

@@ -425,3 +425,25 @@ and separate from the (correct) grounding/refusal behaviour:
 re-run chat-eval, reading the answers. These are quality, not correctness — the pipeline grounds
 and refuses correctly today; RAGAS faithfulness/answer_relevancy (OD-14) will quantify quality
 when wired.
+
+**Resolved 2026-08-02** (docs/09): the prompt-polish pass fixed citation leakage, raw-chunk echo,
+and bare-citation non-answers; grounding-correctness rose 0.294 → 0.529 with refusal accuracy still
+1.0 and zero hallucinations. The case-0 "invented specifics" turned out to be *grounding in a
+wrong-but-present chunk* (an AQF-framework passage), not prompt-level invention — reclassified as a
+retrieval-precision issue, LF-5.
+
+### LF-5 — Retrieval surfaces wrong-but-present context on two cases (retrieval-precision pass)
+
+After the LF-4 prompt polish, two chat-eval answers are wrong not for phrasing but because the
+model faithfully grounded in the **wrong retrieved chunk** (not hallucination — the chunk is real):
+
+- **Case 0 (qualifications):** a retrieved chunk carries a generic **AQF framework** (Bachelor's,
+  Advanced Diploma, …); the model repeats those levels instead of Wyatt's four actual courses.
+- **Case 17 (cost difference):** asked about the **Business** diploma, the answer uses the
+  **Building & Construction** diploma's fee — the wrong course's figure from present context.
+
+**Fix path (a retrieval-precision pass, not a prompt or generation change):** stop surfacing /
+down-rank the AQF-boilerplate chunk and tighten course-specific chunk scoping so a course question
+retrieves that course's row. Candidate levers: reranking precision (RQ1 C2 already helps),
+chunk-scoping/metadata filters, or excluding generic-framework boilerplate at ingest. Verify by
+re-reading cases 0 and 17 after the change. Not fixed now.
