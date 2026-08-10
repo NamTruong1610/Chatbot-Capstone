@@ -60,6 +60,12 @@ def _page_from_dict(raw: dict[str, Any]) -> CrawledPage:
         )
         for t in raw.get("tables", [])
     ]
+    access_level = raw.get("access_level")
+    if access_level is not None and access_level not in ("public", "private"):
+        raise ValueError(
+            f"page {raw.get('url','?')!r}: access_level must be 'public' or 'private', "
+            f"got {access_level!r}"
+        )
     return CrawledPage(
         url=str(raw.get("url", "")),
         title=str(raw.get("title", "")),
@@ -67,6 +73,7 @@ def _page_from_dict(raw: dict[str, Any]) -> CrawledPage:
         depth=int(raw.get("depth", 0)),
         headings=headings,
         tables=tables,
+        access_level=access_level,
     )
 
 
@@ -94,11 +101,16 @@ def ingest(
     if not chunks:
         raise ValueError(f"no chunks produced for {cfg.id} on {domain_id}; nothing to ingest")
 
+    # Per-document access overrides (FR-ACL-02 tier 1), keyed by the page URL a chunk came from.
+    overrides = {page.url: page.access_level for page in pages if page.access_level is not None}
+
     vectors = embedder.encode([c.text for c in chunks])
     records: list[VectorRecord] = []
     by_type: dict[str, int] = {}
     for chunk, vector in zip(chunks, vectors, strict=True):
-        level, rule = assign_access(chunk.source_url, cfg.access_control)
+        level, rule = assign_access(
+            chunk.source_url, cfg.access_control, explicit_level=overrides.get(chunk.source_url)
+        )
         payload = chunk.to_payload(access_level=level, access_rule=rule)
         payload["index_key"] = index_key  # partitions the shared collection (Q1 design)
         point_id = str(uuid.uuid5(_POINT_NAMESPACE, chunk.chunk_id))

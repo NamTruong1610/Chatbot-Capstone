@@ -44,6 +44,14 @@ def _git_sha() -> str:
 def _cmd_ingest(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     pages = load_corpus(args.corpus)
+    manifest = args.corpus.name
+    if args.private_corpus is not None:
+        # Private staff docs (access_level:"private", FR-ACL-02 override) ingest ALONGSIDE public
+        # in one partition rebuild — a second ingest would delete_partition and wipe public.
+        private_pages = load_corpus(args.private_corpus)
+        pages = pages + private_pages
+        manifest = f"{manifest}+{args.private_corpus.name}"
+        print(f"  + {len(private_pages)} private page(s) from {args.private_corpus.name}")
     embedder = build_embedder(cfg.embedding)
     store = VectorStore(cfg.store, dimensions=embedder.dimensions)
     result = ingest(
@@ -53,7 +61,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         pages=pages,
         store=store,
         embedder=embedder,
-        crawl_manifest=args.corpus.name,
+        crawl_manifest=manifest,
     )
     fp = result.fingerprint
     print(
@@ -235,6 +243,10 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("--domain", required=True)
     p_ingest.add_argument("--root-url", required=True)
     p_ingest.add_argument("--corpus", required=True, type=_path)
+    p_ingest.add_argument(
+        "--private-corpus", type=_path, default=None,
+        help="optional JSON of private pages (access_level:'private') ingested with the public set",
+    )
     p_ingest.set_defaults(func=_cmd_ingest)
 
     p_query = sub.add_parser("query", help="dense-retrieve against an ingested index (debug)")

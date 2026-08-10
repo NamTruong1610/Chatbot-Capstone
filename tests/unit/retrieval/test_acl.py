@@ -9,10 +9,10 @@ query that would rank a private tracer first) is in test_chat_pipeline_acl.py.
 from __future__ import annotations
 
 import pytest
-from chatbot.retrieval.acl import build_access_strategy
 
 from chatbot.config.schema import AccessControlConfig, AccessLevel
 from chatbot.config.schema import AccessStrategy as StrategyEnum
+from chatbot.retrieval.acl import build_access_strategy
 from chatbot.retrieval.base import RetrievedChunk
 
 TRACER = "WYT-AG-0447"

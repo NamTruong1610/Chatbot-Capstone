@@ -19,7 +19,7 @@ from chatbot.store.vector import Hit
 TRACER = "WYT-AG-0447"
 
 # Private chunk is authored to out-rank the public one for the query (score 0.99 vs 0.10).
-_CORPUS = [
+_CORPUS: list[dict[str, Any]] = [
     {"chunk_id": "priv", "source_url": "https://x/staff-portal",
      "text": f"Agent {TRACER} is Diana Reyes.", "access_level": "private", "score": 0.99},
     {"chunk_id": "pub", "source_url": "https://x/courses",

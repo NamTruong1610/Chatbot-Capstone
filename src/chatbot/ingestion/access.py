@@ -15,14 +15,22 @@ from __future__ import annotations
 from chatbot.config.schema import AccessControlConfig
 
 
-def assign_access(source_url: str, cfg: AccessControlConfig) -> tuple[str, str]:
-    """Return ``(access_level, access_rule)`` for a chunk from the page it came from.
+def assign_access(
+    source_url: str, cfg: AccessControlConfig, *, explicit_level: str | None = None
+) -> tuple[str, str]:
+    """Return ``(access_level, access_rule)`` for a chunk, in FR-ACL-02 precedence order.
 
-    A page whose URL contains any ``private_url_patterns`` entry (e.g. ``/staff-dashboard``
-    matches ``/staff`` and ``/dashboard``) is ``private``, tagged with the pattern that fired;
-    everything else takes ``default_level``. Fail-closed is not in play here — this assigns a
-    label, it does not grant access — but the first matching pattern wins for a stable rule.
+    1. **Explicit per-document override** — an uploaded page may state its own ``access_level``
+       (e.g. staff-only content that is not URL-addressable); it wins over everything.
+    2. **URL pattern** — a page whose URL contains any ``private_url_patterns`` entry (e.g.
+       ``/staff-dashboard`` matches ``/staff``) is ``private``, tagged with the pattern that fired.
+    3. **Default** — ``default_level``.
+
+    Fail-closed is not in play here — this assigns a label, it does not grant access — but the
+    first matching rule wins for a stable, recorded assignment (docs/05 §1 ``access_rule``).
     """
+    if explicit_level is not None:
+        return explicit_level, "explicit_override"
     url = source_url.lower()
     for pattern in cfg.private_url_patterns:
         if pattern.lower() in url:

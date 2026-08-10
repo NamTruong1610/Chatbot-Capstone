@@ -174,6 +174,14 @@ never falls back to `customer`.
 `controls_blocked` is not debug output — it is the ethics audit trail. It evidences that
 the crawler never activated a transactional control on a live commercial site. Keep it.
 
+**Per-document access override (FR-ACL-02 tier 1).** A page object may carry an explicit
+`"access_level": "public" | "private"`. It is the highest-precedence label rule — it beats the
+URL-pattern and default rules at ingest (`ingestion/access.py`). This is how **uploaded** private
+content (e.g. staff docs that are not URL-addressable) is marked private: put those pages in a
+separate JSON and ingest them alongside the public corpus with `ingest --private-corpus <file>`
+(one partition rebuild — a second `ingest` would wipe the public partition). Absent the field, the
+URL-pattern/default rules apply as before.
+
 ---
 
 ## 5. Results schemas

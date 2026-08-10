@@ -350,6 +350,25 @@ alongside as the cheap cross-check.
 
 ---
 
+### OD-15 — `staff` role added to the role map (RQ2); C0 config_hash changes
+
+**Status:** ☑ Decided · 2026-08-02
+
+**Decision.** Add `staff: [public, private]` to `access_control.role_map` in `C0-baseline.yaml`
+(and the schema default), keeping `customer: [public]` and `admin: [public, private]`. RQ2's
+private-user role is `staff`; `admin` stays for back-compat.
+
+**Consequence — and why it is safe.** Every config inherits C0's `role_map` via `extends`, so
+this changes C0's (and all configs') full `config_hash`. It does **not** change `chunking_hash`
+or `embedding_model`, and the evaluation runner's fingerprint guard keys only on those two
+(docs/04 §5) — so the **ingested index is unaffected and RQ1's stamped results stand**. RQ1's
+retrieval numbers do not depend on `role_map` (roles were unused under label-but-don't-filter).
+Results stamped before this change keep their old hash (immutable, CLAUDE.md rule 7); runs after
+it carry the new hash. This is the CLAUDE.md rule-8 "settle a provisional value before the sweep
+that depends on it" case: RQ2 is the first sweep to use roles, and it uses the corrected map.
+
+---
+
 ## Logged findings
 
 Deferred engineering findings from live crawls — not decisions, not fixed now; tracked so

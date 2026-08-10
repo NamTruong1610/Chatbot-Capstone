@@ -67,6 +67,7 @@ overrides:
     strategy: prefilter
     role_map:
       customer: [public]
+      staff: [public, private]
       admin: [public, private]
     private_url_patterns: [/admin, /staff, /dashboard, /internal, /portal]
     default_level: public
