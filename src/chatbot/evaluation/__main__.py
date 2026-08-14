@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 from chatbot.config.loader import load_config
-from chatbot.evaluation.acl_runner import aggregate_acl, score_acl, write_acl_results
+from chatbot.evaluation.acl_runner import aggregate_acl, is_leak, score_acl, write_acl_results
 from chatbot.evaluation.generation_runner import (
     aggregate_generation,
     score_generation,
@@ -262,7 +262,7 @@ def _cmd_acl_eval(args: argparse.Namespace) -> int:
     for r in results:
         kind = "PRIVATE" if r.is_private else "public "
         cust = "ABSTAIN" if r.customer_abstained else "answer"
-        leak = "  LEAK!" if (r.customer_tracer_present or r.customer_leaked_chunks) else ""
+        leak = "  LEAK!" if is_leak(r) else ""  # public fact in a public answer is NOT a leak
         staff = (
             "has-fact" if r.staff_tracer_present
             else ("abstain" if r.staff_abstained else "answer")

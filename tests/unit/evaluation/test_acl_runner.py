@@ -7,7 +7,7 @@ score the first as isolation_ok and the second as a failure with a raw leak coun
 
 from __future__ import annotations
 
-from chatbot.evaluation.acl_runner import aggregate_acl, score_acl
+from chatbot.evaluation.acl_runner import AclCaseResult, aggregate_acl, is_leak, score_acl
 from chatbot.evaluation.testset import GoldenCase
 from chatbot.pipeline import ChatAnswer
 
@@ -62,6 +62,26 @@ def test_isolation_pass_no_leak_staff_access_public_control() -> None:
     assert agg["isolation_ok"] is True
     assert agg["staff_access"] == 2 and agg["n_private"] == 2  # staff got both private facts
     assert agg["public_both_answer"] == 1 and agg["n_public"] == 1  # both roles answer public
+
+
+def _result(is_private: bool, tracer: bool, leaked: int) -> AclCaseResult:
+    return AclCaseResult(
+        case_id=0, question="q", is_private=is_private,
+        customer_answer="a", customer_abstained=False, customer_leaked_chunks=leaked,
+        customer_tracer_present=tracer, staff_answer="a", staff_abstained=False,
+        staff_tracer_present=True,
+    )
+
+
+def test_is_leak_only_flags_private_tracer_or_leaked_chunks_not_public_facts() -> None:
+    # public-control: the customer is supposed to answer and the fact appears — NOT a leak.
+    assert is_leak(_result(is_private=False, tracer=True, leaked=0)) is False
+    # private row with the tracer in the customer answer — a leak.
+    assert is_leak(_result(is_private=True, tracer=True, leaked=0)) is True
+    # a leaked private chunk is a leak regardless of row type.
+    assert is_leak(_result(is_private=False, tracer=False, leaked=1)) is True
+    # private row, no tracer, no leaked chunk — clean.
+    assert is_leak(_result(is_private=True, tracer=False, leaked=0)) is False
 
 
 def test_eval_catches_a_tracer_leak_in_the_customer_answer() -> None:

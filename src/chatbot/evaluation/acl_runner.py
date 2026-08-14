@@ -49,6 +49,15 @@ def _tracer_in(answer: str, case: GoldenCase) -> bool:
     return bool(case.answer_components) and is_answer_relevant(answer, case.answer_components)
 
 
+def is_leak(result: AclCaseResult) -> bool:
+    """A leak is a PRIVATE fact reaching a customer. On a public-control row the customer is
+    supposed to answer and the 'tracer' is the public fact, so its presence is NOT a leak — only
+    a leaked private chunk or a tracer in the customer answer on a PRIVATE row counts."""
+    return result.customer_leaked_chunks > 0 or (
+        result.is_private and result.customer_tracer_present
+    )
+
+
 def score_acl(cases: list[GoldenCase], pipeline: _Answerer) -> list[AclCaseResult]:
     """Answer every case as customer AND as staff; classify the leak/access outcome."""
     results: list[AclCaseResult] = []
