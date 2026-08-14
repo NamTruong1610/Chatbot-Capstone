@@ -8,6 +8,68 @@ with a new one.
 
 ---
 
+## 2026-08-14 — RQ4: the pipeline generalises; prose (Austral) beats tables (Wyatt) at both retrieval and generation (MEASURED)
+
+The cross-domain generalisation study — the **same** pipeline (C0-baseline, no code or config
+change; `domain_id` is a free string) run against a **second domain**: Austral, an 8-page,
+prose-heavy manufacturing site with **zero tables**, on a 21-question test set. Compared against
+Wyatt (table-heavy training/education site). RQ4 needed nothing built — it fell out of the
+domain-agnostic machinery, exactly as docs/03 §3 predicted.
+
+**Result: the pipeline generalises, and prose is *easier* than tables on both axes.**
+
+| Metric | Austral (prose) | Wyatt (tables) |
+|---|---|---|
+| Retrieval page-hit | **1.000** | 0.833 |
+| Retrieval answer-hit | **0.889** | 0.706 |
+| Generation containment | **0.882** | 0.529 |
+| Refusal accuracy | ~1.0 (corrected) | 1.0 (corrected) |
+
+- **Prose retrieves cleaner.** Austral's answer-hit 0.889 > Wyatt's 0.706. Prose passages embed
+  as focused single-topic vectors; there is no **force-2 blur** (the dense mean-pooling dilution
+  that buried Wyatt's multi-record table chunks, docs/09 2026-07-26). Structure, not domain, drove
+  Wyatt's retrieval difficulty.
+- **Prose generates cleaner.** Austral containment 0.882 vs Wyatt 0.529, with clean answers — no
+  raw-chunk-dumps, no invented facts, no citation leakage. This **confirms table structure drove
+  much of Wyatt's answer messiness** (LF-4): pipe-delimited table rows were what the model dumped
+  raw; prose gives it well-formed text to paraphrase.
+
+**The clean cross-domain contrast — two structure-dependent failure modes:**
+- **Wyatt / tables:** force-2 retrieval blur + raw-table-dump generation + table-orphaning
+  (a record split across chunks). All table-specific; none appear on prose.
+- **Austral / prose:** **one retrieval-recall miss** — case 4 (design software). SolidWorks and
+  AutoCAD *are* on the site, but the answer unit did not rank in the top-5 for that phrasing
+  (retrieval eval answer_hit=0), so the generator — correctly — refused rather than invent. That
+  is a **retrieval-recall** miss on a phrasing gap, not a generation failure and not
+  table-orphaning. Generation grounded correctly on content it never received.
+
+So the two domains fail in *different, structure-linked* ways: Wyatt's tables orphan/blur;
+Austral's prose occasionally misses on recall for an unusual phrasing. Neither is a general
+pipeline defect — which is the RQ4 point: the pipeline works across content structures, and the
+residual failure modes are properties of the *content*, not the machinery.
+
+**Methodology repeated, and it paid off again.** Reading the answers caught a mislabel, same as
+Wyatt: **case 20 (3D printing)** was flagged HALLUCINATION but is a *correct nuanced answer* — the
+chatbot said 3D printing is not offered while accurately noting Austral does 2D/3D **design** (true,
+on-site). Reclassify to correct-handling (as Wyatt case 19); real refusal-accuracy is ~1.0, not
+0.667. This is the third time the containment/refusal metric under-measured a correct nuanced
+answer and human-reading recovered it — the pattern is now a documented, load-bearing part of the
+evaluation method, not an incident. (Local fix: set case 20's `question_type` to `factual_lookup`
+in `austral_rq4.csv`, mirroring the Wyatt 18/19 correction.)
+
+**Minor:** case 13 mangled an address — dropped the unit prefix ("Unit 6/14 Peachtree"), kept
+"Rd, Penrith". An answer-quality glitch (prose extraction of a multi-part address), noted; not a
+retrieval or isolation issue.
+
+**Contribution.** RQ4's answer: **the pipeline generalises across businesses and content
+structures.** Prose (Austral) retrieves and generates *better* than tables (Wyatt); the
+table-handling challenges surfaced across RQ1/Phase-5 (force-2 blur, raw-chunk dump) are
+**table-specific and absent on prose**, and the one prose failure is a bounded retrieval-recall
+miss. A clean structure-driven contrast across two real SME domains, same machinery, results
+grouped by `domain_id` (FR-EVAL-08).
+
+---
+
 ## 2026-08-02 — RQ2: prefilter+enforce achieves ZERO private leaks end-to-end (MEASURED)
 
 The access-control isolation run — `acl-eval` over a 12-case RQ2 set (10 private-lookup + 2
