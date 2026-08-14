@@ -8,6 +8,58 @@ with a new one.
 
 ---
 
+## 2026-08-02 — RQ2: prefilter+enforce achieves ZERO private leaks end-to-end (MEASURED)
+
+The access-control isolation run — `acl-eval` over a 12-case RQ2 set (10 private-lookup + 2
+public-control) under **both** roles, C0-baseline (`strategy: prefilter`), against a real index
+that includes 5 synthesised private staff docs ingested with `--private-corpus`. The private
+facts carry **unique tracer strings** (`WYT-AG-0447`, `Diana Reyes`, `$1,800`, …) so any leak is
+unambiguous.
+
+**Result: ISOLATION PASS.** `customer_leaked_chunks = 0` and `tracer_leaks_in_customer_answer = 0`
+across all 10 private questions (raw counts — docs/06 §4). Every customer **abstains** on private
+questions; the private facts (incl. `WYT-AG-0447` / `Diana Reyes`) reach **staff only**. Public
+control **2/2** — both roles still answer public content, so isolation is not achieved by breaking
+the chatbot. `staff_access 9/10` — the one miss (case 6, compliance-officer question) is a staff
+**retrieval/paraphrase** miss, not an isolation failure (staff were *permitted* the chunk; it just
+wasn't retrieved/stated). Isolation and access are different axes and the eval keeps them separate.
+
+**The contribution: a double-guard, both barriers verified live.**
+- **Barrier 1 — prefilter.** The customer's role resolves to `{public}`, passed as Qdrant's
+  server-side `access_level` filter, so private chunks are **never scored** (FR-ACL-03).
+- **Barrier 2 — enforce backstop.** Runs on every query even under prefilter: a private chunk
+  reaching it from *any* arm is dropped, counted (raw), and logged (FR-ACL-07). Isolation does not
+  depend on a single arm filtering correctly. Fail-closed on an unknown role (rule 4); `none` mode
+  harness-gated (FR-ACL-05).
+
+**Why the check is on the customer's ANSWER, not just retrieval.** The security claim is that a
+customer never *sees* the secret. So the leak test is the tracer string in the customer's final
+generated answer (plus the raw enforce chunk count) — end-to-end, not retrieval-only.
+
+**A sharp illustration — customer-answered ≠ customer-leaked (case 0).** Asked a private question,
+the customer produced a *wrong* answer ("$1,500") — but the real private figure (`$1,800`) did
+**not** appear. The customer hallucinated a plausible number rather than leaking the secret, and
+the tracer check correctly scores this as **no leak**: it distinguishes "the customer said
+something" from "the customer revealed the protected fact." A page-level or did-the-customer-answer
+metric would miss this distinction; the tracer-in-answer check is what makes the isolation claim
+precise.
+
+**Measurement fix during the run.** The per-case CLI label wrongly flagged the public-control rows
+as `LEAK!` — on a public row the "tracer" *is* the public fact and the customer is supposed to
+state it. Fixed with a tested `is_leak` helper (leak only on a private-row tracer or a leaked
+chunk); the aggregate was already correct (`tracer_leaks` counts private rows only), so no number
+changed.
+
+**Contribution.** RQ2's answer on the isolation question: a **prefilter + enforce double-guard**
+delivers **zero private leaks end-to-end**, verified with unique tracer strings across public
+(customer) and private (staff) users; staff retain access and public content is unaffected. The
+deliverable — labels → per-document override + `--private-corpus` ingest → the two-barrier filter →
+a two-role isolation eval that counts leaks raw and checks the customer's answer — is done. (RQ2's
+`postfilter`/`none` *comparison* arms, C11/C12, are a separate later study; this phase built and
+proved enforcement.)
+
+---
+
 ## 2026-08-02 — Prompt polish cleaned the answers (0.294→0.529); two retrieval-precision limits remain (MEASURED)
 
 A `strict_grounded`-only pass (LF-4) — no code, metric, or test-set change — fixed the answer

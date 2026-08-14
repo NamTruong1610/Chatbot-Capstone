@@ -128,7 +128,7 @@ absence rather than retrieval architecture.
 | Key | Type | Default | Arms |
 |---|---|---|---|
 | **`strategy`** | enum | `prefilter` | `prefilter` · `postfilter` · `none` |
-| `role_map` | dict | `{customer: [public], admin: [public, private]}` | — |
+| `role_map` | dict | `{customer: [public], staff: [public, private], admin: [public, private]}` | — |
 | `private_url_patterns` | list | `[/admin, /staff, /dashboard, /internal, /portal]` | — |
 | `default_level` | enum | `public` | — |
 | `fail_closed` | bool | true | **must stay true outside the harness** |

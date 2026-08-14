@@ -254,6 +254,7 @@ class AccessControlConfig(_Section):
     role_map: dict[str, list[AccessLevel]] = Field(
         default_factory=lambda: {
             "customer": [AccessLevel.public],
+            "staff": [AccessLevel.public, AccessLevel.private],
             "admin": [AccessLevel.public, AccessLevel.private],
         }
     )

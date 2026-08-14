@@ -23,3 +23,16 @@ def test_public_page_takes_the_default_with_default_rule() -> None:
 def test_matching_is_case_insensitive() -> None:
     level, _ = assign_access("https://wyatt.nsw.edu.au/Internal/Reports", CFG)
     assert level == "private"
+
+
+def test_explicit_override_wins_over_url_pattern_and_default() -> None:
+    # FR-ACL-02 tier 1: an uploaded page's own access_level beats the URL rule. A public-looking
+    # URL marked private stays private (uploaded staff content is not URL-addressable as /staff).
+    level, rule = assign_access(
+        "https://wyatt.nsw.edu.au/staff-portal", CFG, explicit_level="private"
+    )
+    assert level == "private"
+    assert rule == "explicit_override"
+    # and it can force public on an otherwise-private URL, too — the override is authoritative.
+    level, rule = assign_access("https://wyatt.nsw.edu.au/internal", CFG, explicit_level="public")
+    assert level == "public" and rule == "explicit_override"

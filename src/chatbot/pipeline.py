@@ -14,10 +14,13 @@ from dataclasses import dataclass
 from chatbot.config.schema import ResolvedConfig
 from chatbot.generation.service import GenerationService, build_generation_service
 from chatbot.retrieval import build_retriever
+from chatbot.retrieval.acl import AccessStrategy, build_access_strategy
 from chatbot.retrieval.base import Retriever
 from chatbot.store.embedder import build_embedder
 from chatbot.store.fingerprint import read_fingerprint
 from chatbot.store.vector import VectorStore
+
+_DEFAULT_ROLE = "customer"  # an anonymous request is the public role, not an unknown one
 
 
 class IndexNotReadyError(RuntimeError):
@@ -29,10 +32,11 @@ class ChatAnswer:
     answer: str
     sources: list[str]
     grounded: bool
+    leaked_chunks: int = 0  # private chunks that reached this role (must be 0 for a customer)
 
 
 class ChatPipeline:
-    """Retrieve for a fixed (config, domain), then generate a grounded answer. One per server."""
+    """Retrieve for a fixed (config, domain), apply access control, then generate."""
 
     def __init__(
         self,
@@ -40,22 +44,32 @@ class ChatPipeline:
         domain_id: str,
         retriever: Retriever,
         generator: GenerationService,
+        access: AccessStrategy,
     ) -> None:
         self._cfg = cfg
         self._domain = domain_id
         self._retriever = retriever
         self._generator = generator
+        self._access = access
 
     @property
     def domain_id(self) -> str:
         return self._domain
 
     def answer(self, question: str, *, role: str | None = None) -> ChatAnswer:
-        # role is reserved for RQ2 access control; this phase is label-but-don't-filter, so
-        # retrieval is unfiltered (allowed_levels=None). Passing role now keeps the seam.
-        result = self._retriever.retrieve(question, domain_id=self._domain, allowed_levels=None)
-        gen = self._generator.generate(question, result.chunks)
-        return ChatAnswer(answer=gen.answer, sources=gen.sources, grounded=gen.grounded)
+        # An absent role is the public default (customer); a *present but unmapped* role fails
+        # closed inside levels_for (rule 4). Barrier 1 (prefilter): pass the role's permitted
+        # levels to retrieval so the dense arm never scores impermissible chunks server-side.
+        role = role or _DEFAULT_ROLE
+        allowed = self._access.levels_for(role) if self._access.prefilter() else None
+        result = self._retriever.retrieve(question, domain_id=self._domain, allowed_levels=allowed)
+        # Barrier 2 (enforce): always runs, even under prefilter — a leak from ANY arm is dropped
+        # and counted here, so isolation does not depend on any single arm filtering correctly.
+        permitted, leaked = self._access.enforce(result.chunks, role)
+        gen = self._generator.generate(question, permitted)
+        return ChatAnswer(
+            answer=gen.answer, sources=gen.sources, grounded=gen.grounded, leaked_chunks=leaked
+        )
 
 
 def _require_index(cfg: ResolvedConfig, domain_id: str) -> None:
@@ -84,12 +98,15 @@ def build_chat_pipeline(
     *,
     retriever: Retriever | None = None,
     generator: GenerationService | None = None,
+    harness: bool = False,
 ) -> ChatPipeline:
     """Assemble the retrieve→generate pipeline for one config+domain (the shared compose).
 
     On the real path the fingerprint guard runs first (fail fast), then the embedder/store/
     retriever and the generator are built. ``retriever``/``generator`` are injectable so tests
-    (and the endpoint's tests) drive it without a store, a model, or Ollama.
+    (and the endpoint's tests) drive it without a store, a model, or Ollama. ``harness`` gates the
+    ``none`` access strategy (FR-ACL-05) — the API never passes it, so a serving pipeline cannot
+    disable leak protection.
     """
     if retriever is None:
         _require_index(cfg, domain_id)
@@ -98,4 +115,5 @@ def build_chat_pipeline(
         retriever = build_retriever(cfg, store, embedder)
     if generator is None:
         generator = build_generation_service(cfg)
-    return ChatPipeline(cfg, domain_id, retriever, generator)
+    access = build_access_strategy(cfg.access_control, harness=harness)
+    return ChatPipeline(cfg, domain_id, retriever, generator, access)

@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from chatbot.config.loader import load_config
+from chatbot.evaluation.acl_runner import aggregate_acl, is_leak, score_acl, write_acl_results
 from chatbot.evaluation.generation_runner import (
     aggregate_generation,
     score_generation,
@@ -44,6 +45,14 @@ def _git_sha() -> str:
 def _cmd_ingest(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     pages = load_corpus(args.corpus)
+    manifest = args.corpus.name
+    if args.private_corpus is not None:
+        # Private staff docs (access_level:"private", FR-ACL-02 override) ingest ALONGSIDE public
+        # in one partition rebuild — a second ingest would delete_partition and wipe public.
+        private_pages = load_corpus(args.private_corpus)
+        pages = pages + private_pages
+        manifest = f"{manifest}+{args.private_corpus.name}"
+        print(f"  + {len(private_pages)} private page(s) from {args.private_corpus.name}")
     embedder = build_embedder(cfg.embedding)
     store = VectorStore(cfg.store, dimensions=embedder.dimensions)
     result = ingest(
@@ -53,7 +62,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         pages=pages,
         store=store,
         embedder=embedder,
-        crawl_manifest=args.corpus.name,
+        crawl_manifest=manifest,
     )
     fp = result.fingerprint
     print(
@@ -226,6 +235,60 @@ def _cmd_chat_eval(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_acl_eval(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    try:
+        pipeline = build_chat_pipeline(cfg, args.domain)  # prefilter + enforce backstop (C0)
+    except IndexNotReadyError as exc:
+        sys.stderr.write(f"error: {exc}\n")
+        return 1
+
+    cases = load_testset(args.testset)
+    results = score_acl(cases, pipeline)
+    agg = aggregate_acl(results)
+    run_meta = {
+        "config_id": cfg.id, "config_hash": cfg.config_hash(), "git_sha": _git_sha(),
+        "domain_id": args.domain, "strategy": cfg.access_control.strategy.value,
+        "role_map": {r: [x.value for x in lv] for r, lv in cfg.access_control.role_map.items()},
+        "aggregate": agg,
+    }
+    out = write_acl_results(
+        results, config_id=cfg.id, config_hash=cfg.config_hash(), git_sha=_git_sha(),
+        domain_id=args.domain, run_meta=run_meta,
+    )
+
+    print(f"\n=== {cfg.id} access isolation on {args.domain} "
+          f"(strategy={cfg.access_control.strategy.value}) -> {out} ===\n")
+    for r in results:
+        kind = "PRIVATE" if r.is_private else "public "
+        cust = "ABSTAIN" if r.customer_abstained else "answer"
+        leak = "  LEAK!" if is_leak(r) else ""  # public fact in a public answer is NOT a leak
+        staff = (
+            "has-fact" if r.staff_tracer_present
+            else ("abstain" if r.staff_abstained else "answer")
+        )
+        print(
+            f"case {r.case_id:<2} [{kind}] customer={cust} "
+            f"(leaked_chunks={r.customer_leaked_chunks}, tracer={r.customer_tracer_present})"
+            f"{leak}  staff={staff}"
+        )
+        print(f"   Q: {r.question}")
+        print(f"   customer: {' '.join(r.customer_answer.split())}")
+        print(f"   staff:    {' '.join(r.staff_answer.split())}\n")
+
+    print("--- aggregate ---")
+    verdict = "PASS (isolation holds)" if agg["isolation_ok"] else "FAIL (LEAK DETECTED)"
+    print(f"ISOLATION: {verdict}")
+    print(f"  customer_leaked_chunks = {agg['customer_leaked_chunks']}  (RAW; must be 0)")
+    print(f"  tracer_leaks_in_customer_answer = {agg['tracer_leaks_in_customer_answer']}  "
+          f"(RAW; must be 0)")
+    print(f"  staff_access = {agg['staff_access']}/{agg['n_private']} "
+          f"(rate {agg['staff_access_rate']:.3f})")
+    print(f"  public_both_answer = {agg['public_both_answer']}/{agg['n_public']} "
+          f"(both roles still answer public content)")
+    return 0 if agg["isolation_ok"] else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m chatbot.evaluation")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -235,6 +298,10 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("--domain", required=True)
     p_ingest.add_argument("--root-url", required=True)
     p_ingest.add_argument("--corpus", required=True, type=_path)
+    p_ingest.add_argument(
+        "--private-corpus", type=_path, default=None,
+        help="optional JSON of private pages (access_level:'private') ingested with the public set",
+    )
     p_ingest.set_defaults(func=_cmd_ingest)
 
     p_query = sub.add_parser("query", help="dense-retrieve against an ingested index (debug)")
@@ -254,6 +321,12 @@ def main(argv: list[str] | None = None) -> int:
     p_ce.add_argument("--domain", required=True)
     p_ce.add_argument("--testset", required=True, type=_path)
     p_ce.set_defaults(func=_cmd_chat_eval)
+
+    p_acl = sub.add_parser("acl-eval", help="run the test set under customer+staff; report leaks")
+    p_acl.add_argument("--config", required=True)
+    p_acl.add_argument("--domain", required=True)
+    p_acl.add_argument("--testset", required=True, type=_path)
+    p_acl.set_defaults(func=_cmd_acl_eval)
 
     args = parser.parse_args(argv)
     result: int = args.func(args)

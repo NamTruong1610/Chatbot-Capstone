@@ -110,6 +110,28 @@ def test_ingest_produces_typed_chunks_labels_access_and_writes_fingerprint(tmp_p
     assert fp.chunk_count == result.chunk_count
 
 
+def test_explicit_access_override_on_a_page_labels_its_chunks_private(tmp_path: Path) -> None:
+    # An uploaded private doc with a PUBLIC-looking URL (no /staff, /internal, ...) must still be
+    # labelled private via its explicit access_level (FR-ACL-02 tier 1) — the RQ2 ingest path.
+    cfg = load_config("C0-baseline")
+    upload = CrawledPage(
+        url="https://wyatt.nsw.edu.au/agent-directory",  # would be public by URL rule
+        title="Agent Directory",
+        text="Agent WYT-AG-0447 is Diana Reyes. Commission is $1,800.",
+        depth=0,
+        access_level="private",  # explicit override
+    )
+    client = FakeClient()
+    store = VectorStore(cfg.store, dimensions=384, client=client)
+    ingest(
+        cfg, domain_id="wyatt-edu", root_url="https://wyatt.nsw.edu.au", pages=[upload],
+        store=store, embedder=FakeEmbedder(), crawl_manifest="private.json", index_dir=tmp_path,
+    )
+    payloads = [p.payload for p in client.points]
+    assert payloads and all(p["access_level"] == "private" for p in payloads)
+    assert all(p["access_rule"] == "explicit_override" for p in payloads)
+
+
 def test_ingest_is_deterministic_in_point_ids(tmp_path: Path) -> None:
     a, b = FakeClient(), FakeClient()
     _ingest(tmp_path, a)

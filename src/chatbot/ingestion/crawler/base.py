@@ -126,6 +126,9 @@ class CrawledPage:
     forms: list[Form] = field(default_factory=list)
     tables: list[Table] = field(default_factory=list)
     controls: list[Control] = field(default_factory=list)
+    # Explicit per-document access override (FR-ACL-02 tier 1), for uploaded non-crawled content
+    # (e.g. private staff docs). None means "let the URL-pattern/default rule decide".
+    access_level: str | None = None
 
 
 # --------------------------------------------------------------------------------------
