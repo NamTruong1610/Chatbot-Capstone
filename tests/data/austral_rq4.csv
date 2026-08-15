@@ -1,0 +1,22 @@
+question,answer,source_page,question_type,access_level,answer_terms,notes
+What services does Austral Manufacturing offer?,"Design and fabrication including laser cutting, sheet metal bending, rolling, and surface treatment such as priming, painting, and powder coating.",https://australmanufacturing.com.au/,factual_lookup,public,laser cutting,prose-embedded service list on homepage
+What power is Austral's laser cutting machine?,Austral uses a 12kW laser cutting machine.,https://australmanufacturing.com.au/capabilities/,factual_lookup,public,12kW,"key spec, prose"
+What metals can Austral's laser machine cut?,"Brass, copper, aluminium, stainless steel, and mild steel.",https://australmanufacturing.com.au/capabilities/;https://australmanufacturing.com.au/faqs/,factual_lookup,public,stainless steel,list appears in capabilities and FAQ
+What is the maximum laser cutting thickness for brass?,Up to 8 mm for brass.,https://australmanufacturing.com.au/capabilities/,factual_lookup,public,8 mm,"specific spec, prose"
+What design software does Austral use?,SolidWorks and AutoCAD.,https://australmanufacturing.com.au/capabilities/;https://australmanufacturing.com.au/faqs/,factual_lookup,public,SolidWorks,named tools
+What industries does Austral serve?,"Construction, automotive, aerospace, manufacturing, and architectural projects.",https://australmanufacturing.com.au/faqs/,factual_lookup,public,aerospace,FAQ answer
+What Australian Standards does Austral comply with?,"AS 1100 (technical drawings), AS/NZS 1554 (welding), and AS 4506 (powder coating).",https://australmanufacturing.com.au/faqs/,factual_lookup,public,AS 4506,"compliance standards, FAQ"
+what is powder coating,"A finishing process using a dry powder of polymer resin, pigments and additives, electrostatically charged and sprayed onto metal, then cured in a high-temperature oven.",https://australmanufacturing.com.au/powder-coating/,factual_lookup,public,polymer resin,natural phrasing; process description
+When was Austral Manufacturing established?,Since 2019.,https://australmanufacturing.com.au/about-us/,factual_lookup,public,2019,"prose fact, about page"
+Who is the General Manager of Austral?,Akshay Kakadiya is the General Manager.,https://australmanufacturing.com.au/about-us/,factual_lookup,public,Akshay Kakadiya,"named person, about page"
+Who is Austral's Operations Manager?,Jai Kumar is the Operations Manager.,https://australmanufacturing.com.au/about-us/,factual_lookup,public,Jai Kumar,named person
+Does Austral have a price-beating guarantee?,Yes — they guarantee to beat any written quote by 5%.,https://australmanufacturing.com.au/about-us/,factual_lookup,public,5%,natural phrasing; the pricing guarantee
+how fast will i get a quote,Austral responds with a quote within 24 hours.,https://australmanufacturing.com.au/free-quote/,factual_lookup,public,24 hours,natural phrasing; quote turnaround
+Where is Austral Manufacturing located?,"Unit 6/14 Peachtree Rd, Penrith NSW 2750.",https://australmanufacturing.com.au/contact-us/,factual_lookup,public,Penrith,"address, contact page"
+What is Austral's phone number?,+61 470 233 953,https://australmanufacturing.com.au/contact-us/,factual_lookup,public,470 233 953,contact fact
+What is Austral's email address?,info@australmanufacturing.com.au,https://australmanufacturing.com.au/contact-us/,factual_lookup,public,info@australmanufacturing,contact fact
+Is Austral Australian-owned?,"Yes, Austral Manufacturing is a proudly Australian-owned company.",https://australmanufacturing.com.au/about-us/;https://australmanufacturing.com.au/,factual_lookup,public,Australian-owned,appears on multiple pages
+How do I request a quote from Austral?,"Through the Free Quote form — email or submit project details and plans, and they respond within 24 hours.",https://australmanufacturing.com.au/free-quote/;https://australmanufacturing.com.au/contact-us/,multi_chunk,public,Free Quote;24 hours,process spanning free-quote + contact
+What are Austral's standard prices for laser cutting?,N/A,,out_of_scope,public,,no price list anywhere on the site — tests abstention
+Is Austral ISO 9001 certified?,N/A,,out_of_scope,public,,ISO 9001 not mentioned; only AS standards — tests abstention
+Does Austral offer 3D printing?,"No — Austral does not offer 3D printing, though its design team works in 2D and 3D modelling.",https://australmanufacturing.com.au/capabilities/,factual_lookup,public,3D,reclassified from out_of_scope: 3D printing not offered but 2D/3D design is
