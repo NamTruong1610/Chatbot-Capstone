@@ -8,6 +8,50 @@ with a new one.
 
 ---
 
+## 2026-08-14 — NAMED FINDING: automated metrics repeatedly mislabelled correct behaviour; reading against source was load-bearing every time
+
+This is not a fifth experiment — it is the **cross-cutting methodological finding** the previous
+entries keep re-discovering, stated once as a single lesson because it is a contribution in its own
+right (evaluation-methodology chapter), not four incidents.
+
+**In every phase, an automated metric scored correct system behaviour as a failure — or was blind
+to a real difference — and reading the outputs against the source corpus was necessary to catch
+it.** Four independent instances, four different metrics:
+
+1. **Chunking (2026-07-26) — page-level blindness.** Page-level relevance scored two chunking
+   configs as identical "hits" because both returned *a* chunk from the gold page; it was blind to
+   whether the answer survived intra-page chunking. Only reading the chunks (then building
+   answer-span) revealed the real difference.
+2. **RQ1 (2026-07-26) — non-discriminating test data.** The chunk-level "C0 hit / C5 miss" result
+   did not reproduce live, and ambient keywords ("Lidcombe" in footers; later "bursary" on 9 pages)
+   false-positived against every page. Only checking questions against the actual corpus caught the
+   artefacts; it produced the test-set construction rules.
+3. **Generation (2026-08-01) — mislabelled ground truth.** The chatbot correctly surfaced a bursary
+   / real financial terms, but the test set mislabelled those questions `out_of_scope`, so the
+   metric scored *correct answers* as hallucinations (refusal accuracy 0.333). Reading answers
+   against the site moved it to 1.0 with **no model change** — the model was never wrong.
+4. **RQ4 (2026-08-14) — mislabelled nuance.** Austral case 20 (a correct "no 3D printing, but yes
+   2D/3D design" answer) and the containment proxy's chronic under-measurement of focused correct
+   answers again scored right behaviour as failure until read.
+
+**The lesson (load-bearing).** Automated metrics here have a systematic bias: they under-measure or
+mislabel *correct-but-nuanced* behaviour — a hedge, a partial-information answer, a focused answer
+that omits a question-established term, a refusal that is right because retrieval missed. Every such
+case looked like a model failure to the metric and was not. **The validity of the numbers in this
+thesis depends on pairing each automated metric with a human read against the source** — not as
+optional QA, but as a required step, because the failure mode is not random noise: it is the metric
+being blind to exactly the behaviours a *good* grounded chatbot exhibits. The evaluation protocol
+should therefore report automated metrics as a **floor**, with the human read as the instrument
+that corrects them — and every headline number in this log carries a "(MEASURED)" tag precisely
+because it survived that read.
+
+**Consequence for the harness.** This is why `chat-eval` and `acl-eval` **print every answer**, why
+the containment proxy is documented as a floor (OD-14), and why three test-set mislabels
+(Wyatt 18/19, Austral 20) were corrected *from reading*, not from the metric. Future RQs (RQ3
+fine-tuning especially, where "better answer" is subjective) must budget for the read.
+
+---
+
 ## 2026-08-14 — RQ4: the pipeline generalises; prose (Austral) beats tables (Wyatt) at both retrieval and generation (MEASURED)
 
 The cross-domain generalisation study — the **same** pipeline (C0-baseline, no code or config
