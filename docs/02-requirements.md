@@ -117,6 +117,7 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 | FR-GEN-06 | If retrieval returns nothing, return the abstention phrase without calling the LLM. | M | Cost, correctness |
 | FR-GEN-07 | Conversation history passed to the model is bounded by `generation.history_turns`. | S | Context limits |
 | FR-GEN-08 | `generation.temperature` defaults to 0.0 for evaluation. Non-zero requires an explicit flag and is recorded in results. | M | Determinism |
+| FR-GEN-09 | A context-dependent follow-up is condensed to a standalone retrieval query using bounded conversation history **before** retrieval (the raw follow-up embeds to nothing useful). Governed by `conversation.rewrite_queries`; a **no-op when history is empty**, so every single-shot eval retrieves on the raw question unchanged. The rewrite is pinned to `temperature 0.0` (deterministic) and the standalone query is persisted per turn. | S | Multi-turn (Phase 8) |
 
 ## FR-EVAL — Evaluation harness
 
@@ -139,9 +140,9 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 
 | ID | Requirement | Pri | Trace |
 |---|---|---|---|
-| FR-API-01 | `POST /api/chat/message` accepts message, `domain_id`, `user_id`, `session_id`, `role`; returns reply, sources, grounded flag, retrieval telemetry. | M | Brief |
+| FR-API-01 | `POST /api/chat/message` accepts message, `domain_id`, `user_id`, `session_id`, `role`; returns answer, sources, grounded flag, and (when the turn is part of a conversation) the `session_id`. A request **without** `session_id` is stateless single-shot; **with** one it is multi-turn (history loaded, follow-up condensed, messages persisted). `GET /api/chat/conversation/{session_id}` returns the stored message log. | M | Brief |
 | FR-API-02 | Ingestion and crawl endpoints require an API key; chat does not. | M | Brief |
-| FR-API-03 | Session history in Redis with TTL; summarised to Postgres on session end. | S | Existing design |
+| FR-API-03 | Conversation history is persisted in Postgres, scoped by `(session_id, domain_id, role)`, and read back per turn (`docs/05` §7). **Amended (OD-16):** the original Redis hot-path + summary-on-session-end design is deferred — Postgres is the live store and summarisation is a later phase. A conversation's `(domain_id, role)` is fixed at creation and a mismatched reuse fails closed (403), extending RQ2 isolation into the conversation layer. | S | Existing design; OD-16 |
 | FR-API-04 | The active configuration is reported by the health endpoint. | S | Ops |
 | FR-UI-01 | A single-script-tag embeddable widget, style-isolated from the host page. | M | Brief |
 | FR-UI-02 | The widget displays source links returned by the API. | S | Trust |

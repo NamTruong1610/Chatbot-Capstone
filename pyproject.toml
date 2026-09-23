@@ -38,6 +38,11 @@ dependencies = [
     # Serving (Phase 5): the demonstrable chat endpoint (FR-API). FastAPI app + uvicorn runner.
     "fastapi>=0.110,<1",
     "uvicorn>=0.27,<1",
+    # Conversation persistence (Phase 8, FR-API-01/03; OD-16): Postgres via psycopg 3, confined
+    # to store/conversation.py behind our own typed store. Lazy-imported so unit tests that use
+    # the in-memory store need it neither installed nor running; the [binary] extra bundles libpq
+    # so there is no system dependency (CLAUDE.md "prefer boring"). No ORM — two tables, plain SQL.
+    "psycopg[binary]>=3.1,<4",
 ]
 
 [project.optional-dependencies]
@@ -77,7 +82,8 @@ files = ["src", "tests"]
 # All are used behind our own typed wrappers, so silence missing-import without loosening
 # our code.
 module = [
-    "yaml", "bs4", "qdrant_client", "qdrant_client.*", "sentence_transformers", "rank_bm25"
+    "yaml", "bs4", "qdrant_client", "qdrant_client.*", "sentence_transformers", "rank_bm25",
+    "psycopg", "psycopg.*",
 ]
 ignore_missing_imports = true
 

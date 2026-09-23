@@ -18,9 +18,22 @@ _TIMEOUT_S = 120.0
 
 @runtime_checkable
 class LLMClient(Protocol):
-    """Turns a (system, user) pair into a completion string. The one seam tests fake."""
+    """Turns a (system, user) pair into a completion string. The one seam tests fake.
 
-    def complete(self, *, system: str, user: str, temperature: float, max_tokens: int) -> str: ...
+    ``history`` (Phase 8) carries prior conversation messages that sit between the system and the
+    current user turn. It defaults to none, so a single-shot call is byte-for-byte what it always
+    was — ``[system, user]`` — and every RQ eval's wire payload is unchanged.
+    """
+
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float,
+        max_tokens: int,
+        history: list[dict[str, str]] | None = None,
+    ) -> str: ...
 
 
 class OpenAICompatClient:
@@ -40,13 +53,24 @@ class OpenAICompatClient:
 
             self._http = httpx.Client(timeout=_TIMEOUT_S)
 
-    def complete(self, *, system: str, user: str, temperature: float, max_tokens: int) -> str:
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float,
+        max_tokens: int,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
+        # Order is system → prior turns → current user. Empty/absent history yields exactly
+        # [system, user], so single-shot generation posts today's payload unchanged.
+        messages = [{"role": "system", "content": system}]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": user})
         payload = {
             "model": self._model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": False,

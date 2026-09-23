@@ -466,3 +466,40 @@ down-rank the AQF-boilerplate chunk and tighten course-specific chunk scoping so
 retrieves that course's row. Candidate levers: reranking precision (RQ1 C2 already helps),
 chunk-scoping/metadata filters, or excluding generic-framework boilerplate at ingest. Verify by
 re-reading cases 0 and 17 after the change. Not fixed now.
+---
+
+## OD-16 — Conversation history: Postgres-primary, no Redis, no summarisation (Phase 8)
+
+**Status:** ☑ Resolved 2026-09-23 · **Decider:** you (approved) · **Blocked:** the multi-turn
+serving phase (chat history + demo app)
+
+**Question.** FR-API-03 as written specifies *session history in Redis with TTL, summarised to
+Postgres on session end*. The demo-app phase needs multi-turn context + durable history now, but
+not summarisation. Build the full Redis+summary design, or descope?
+
+**Decision.** Descope for the demo. **Postgres is the live conversation store**; Redis and
+summary-on-session-end are **deferred**. Summarisation-on-overflow is a separate later phase.
+FR-API-03 amended to reflect this. Honest design evolution, recorded — not silent drift.
+
+**Two structural consequences, both approved:**
+
+1. **The `conversation` config block is excluded from `config_hash`.** Multi-turn behaviour is a
+   *serving* concern no research question measures; every eval runs single-shot with no history,
+   so it never changes a scored number. Putting the block inside the eight hashed sections would
+   have changed the fingerprint on every already-recorded RQ1/2/4 result (CLAUDE.md rules 7, 8).
+   Keeping it out — carried on the resolved config but absent from `_SECTION_FIELDS` — leaves the
+   fingerprint byte-identical, pinned by `test_config_hash_unchanged_by_conversation` (C0's hash
+   `721c205e…` asserted unchanged). The Postgres DSN is likewise infrastructure
+   (`CHATBOT_POSTGRES_DSN`), not a config field.
+
+2. **Conversation scope is fail-closed, extending RQ2 isolation into the conversation layer.** A
+   conversation's `(domain_id, role)` is fixed at creation; reusing its `session_id` under a
+   different role/domain is refused (403 at the endpoint, `ConversationScopeError` in the store) —
+   a customer can never resume a staff conversation and inherit its private history.
+
+**Related:** FR-GEN-09 (condense-before-retrieve) is the retrieval half of this phase; the rewrite
+is pinned to `temperature 0.0` for determinism, independent of `generation.temperature`.
+
+**Deferred to later phases:** Redis hot-path + TTL; summary-on-session-end / long-conversation
+compression; per-conversation auth on the history-fetch endpoint (chat is unauthenticated today,
+FR-API-02).

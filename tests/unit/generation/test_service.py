@@ -34,9 +34,18 @@ class FakeLLMClient:
         self.response = response
         self.calls: list[dict[str, Any]] = []
 
-    def complete(self, *, system: str, user: str, temperature: float, max_tokens: int) -> str:
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float,
+        max_tokens: int,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
         self.calls.append(
-            {"system": system, "user": user, "temperature": temperature, "max_tokens": max_tokens}
+            {"system": system, "user": user, "temperature": temperature, "max_tokens": max_tokens,
+             "history": history}
         )
         return self.response
 
@@ -82,6 +91,31 @@ def test_model_abstention_is_detected_and_returns_no_sources() -> None:
     assert res.answer == ABSTENTION
     assert res.sources == []  # no hallucinated sources attached to a refusal
     assert len(fake.calls) == 1  # the LLM WAS consulted (there was context to try)
+
+
+def test_history_is_threaded_to_the_client_as_prior_messages() -> None:
+    # Multi-turn: the prior exchange reaches the client as user/assistant messages, in order,
+    # while a single-shot call (no history) passes history=None — today's exact payload.
+    from chatbot.generation.history import Turn
+
+    fake = FakeLLMClient("The fee is $11,500 [1].")
+    chunks = [_chunk("https://x/courses", "Diploma of Business fee is $11,500", 1)]
+    history = [Turn(user="Tell me about the Diploma of Business", assistant="A 12-month course.")]
+    _svc(fake).generate("how much is it?", chunks, history=history)
+
+    (call,) = fake.calls
+    assert call["history"] == [
+        {"role": "user", "content": "Tell me about the Diploma of Business"},
+        {"role": "assistant", "content": "A 12-month course."},
+    ]
+
+
+def test_single_shot_generation_passes_no_history() -> None:
+    fake = FakeLLMClient("answer [1].")
+    chunks = [_chunk("https://x/courses", "some context", 1)]
+    _svc(fake).generate("a standalone question?", chunks)
+    (call,) = fake.calls
+    assert call["history"] is None  # byte-identical to the pre-Phase-8 single-shot call
 
 
 def test_sources_dedupe_and_preserve_order() -> None:

@@ -311,6 +311,34 @@ class EvaluationConfig(_Section):
     paired_test: PairedTest = PairedTest.wilcoxon
 
 
+class ConversationConfig(_Section):
+    """Multi-turn serving behaviour (Phase 8, FR-GEN-09). **Not an experimental section.**
+
+    This governs the demo chatbot's conversation layer — whether follow-ups are condensed to a
+    standalone query before retrieval, and which prompt does the condensing. It is a *serving*
+    concern that no research question measures: every RQ eval runs single-shot with no history,
+    so none of these values ever changes a scored retrieval or generation number. For that reason
+    ``conversation`` is deliberately excluded from ``ResolvedConfig._SECTION_FIELDS`` and therefore
+    from ``config_hash`` — adding it must not alter the fingerprint that stamps existing RQ1/2/4
+    results (CLAUDE.md rules 7, 8). The guardrail test
+    ``test_config_hash_unchanged_by_conversation`` pins that invariant.
+
+    The Postgres DSN is not here: persistence connection is infrastructure, read from the
+    ``CHATBOT_POSTGRES_DSN`` environment variable (like ``CHATBOT_CHROMIUM_PATH``), not an
+    experiment parameter.
+    """
+
+    # Whether the conversation layer is active at all (persistence + multi-turn context).
+    enabled: bool = True
+    # Whether a follow-up is condensed to a standalone query before retrieval. When false, the
+    # raw message is retrieved on directly — history still reaches generation, but "it"/"that"
+    # follow-ups will retrieve poorly. The whole point of Phase 8 is that this is true.
+    rewrite_queries: bool = True
+    # The prompt variant (prompts/<name>.md) that does the condensing. The rewrite reuses the
+    # generation model (decision 8: prefer boring); only the prompt differs.
+    rewrite_prompt_variant: str = "condense_question"
+
+
 # --------------------------------------------------------------------------------------
 # The resolved configuration — meta + all eight sections, post-merge.
 # --------------------------------------------------------------------------------------
@@ -343,8 +371,16 @@ class ResolvedConfig(BaseModel):
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
 
-    # Names of the parameter sections, in the order they appear above. Metadata is
-    # deliberately excluded from the hash (see `config_hash`).
+    # --- serving-only, NOT a parameter section (excluded from the hash) ---
+    # Multi-turn conversation behaviour (Phase 8). Carried on the resolved config so it is
+    # config-driven (CLAUDE.md rule 1), but kept out of `_SECTION_FIELDS` — and therefore out of
+    # `config_hash` — because no RQ measures it and it must not perturb the fingerprint on
+    # already-recorded results. See ConversationConfig's docstring and the guardrail test.
+    conversation: ConversationConfig = Field(default_factory=ConversationConfig)
+
+    # Names of the parameter sections, in the order they appear above. Metadata AND the
+    # serving-only `conversation` block are deliberately excluded from the hash (see
+    # `config_hash` and `conversation`'s docstring).
     _SECTION_FIELDS = (
         "ingestion",
         "chunking",

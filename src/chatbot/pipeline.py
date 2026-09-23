@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from chatbot.config.schema import ResolvedConfig
+from chatbot.generation.history import Turn
+from chatbot.generation.rewrite import QueryRewriter, build_query_rewriter
 from chatbot.generation.service import GenerationService, build_generation_service
 from chatbot.retrieval import build_retriever
 from chatbot.retrieval.acl import AccessStrategy, build_access_strategy
@@ -33,6 +35,10 @@ class ChatAnswer:
     sources: list[str]
     grounded: bool
     leaked_chunks: int = 0  # private chunks that reached this role (must be 0 for a customer)
+    # The query actually sent to retrieval: the condensed standalone query on a rewritten
+    # follow-up, else the original question. Persisted as provenance (decision 7) so a bad
+    # multi-turn retrieval can be traced back to what it searched on.
+    search_query: str = ""
 
 
 class ChatPipeline:
@@ -45,30 +51,53 @@ class ChatPipeline:
         retriever: Retriever,
         generator: GenerationService,
         access: AccessStrategy,
+        rewriter: QueryRewriter | None = None,
     ) -> None:
         self._cfg = cfg
         self._domain = domain_id
         self._retriever = retriever
         self._generator = generator
         self._access = access
+        self._rewriter = rewriter
 
     @property
     def domain_id(self) -> str:
         return self._domain
 
-    def answer(self, question: str, *, role: str | None = None) -> ChatAnswer:
+    def answer(
+        self, question: str, *, role: str | None = None, history: list[Turn] | None = None
+    ) -> ChatAnswer:
         # An absent role is the public default (customer); a *present but unmapped* role fails
-        # closed inside levels_for (rule 4). Barrier 1 (prefilter): pass the role's permitted
-        # levels to retrieval so the dense arm never scores impermissible chunks server-side.
+        # closed inside levels_for (rule 4).
         role = role or _DEFAULT_ROLE
+
+        # Condense-before-retrieve (FR-GEN-09): a context-dependent follow-up ("how much is it?")
+        # is rewritten to a standalone query using the history BEFORE it hits retrieval. This runs
+        # ONLY when there is history and rewriting is enabled — a single-shot request retrieves on
+        # the raw question, byte-for-byte as before, so every RQ eval number is untouched.
+        search_query = question
+        if history and self._rewriter is not None and self._cfg.conversation.rewrite_queries:
+            search_query = self._rewriter.rewrite(question, history)
+
+        # Barrier 1 (prefilter): pass the role's permitted levels to retrieval so the dense arm
+        # never scores impermissible chunks server-side.
         allowed = self._access.levels_for(role) if self._access.prefilter() else None
-        result = self._retriever.retrieve(question, domain_id=self._domain, allowed_levels=allowed)
+        result = self._retriever.retrieve(
+            search_query, domain_id=self._domain, allowed_levels=allowed
+        )
         # Barrier 2 (enforce): always runs, even under prefilter — a leak from ANY arm is dropped
         # and counted here, so isolation does not depend on any single arm filtering correctly.
         permitted, leaked = self._access.enforce(result.chunks, role)
-        gen = self._generator.generate(question, permitted)
+        # Generation sees the ORIGINAL question plus history (so it answers conversationally); only
+        # retrieval used the rewrite. Pass history only when present, keeping the single-shot call
+        # to the generator identical to before.
+        if history:
+            gen = self._generator.generate(question, permitted, history=history)
+        else:
+            gen = self._generator.generate(question, permitted)
         return ChatAnswer(
-            answer=gen.answer, sources=gen.sources, grounded=gen.grounded, leaked_chunks=leaked
+            answer=gen.answer, sources=gen.sources, grounded=gen.grounded, leaked_chunks=leaked,
+            search_query=search_query,
         )
 
 
@@ -98,22 +127,30 @@ def build_chat_pipeline(
     *,
     retriever: Retriever | None = None,
     generator: GenerationService | None = None,
+    rewriter: QueryRewriter | None = None,
     harness: bool = False,
 ) -> ChatPipeline:
     """Assemble the retrieve→generate pipeline for one config+domain (the shared compose).
 
     On the real path the fingerprint guard runs first (fail fast), then the embedder/store/
-    retriever and the generator are built. ``retriever``/``generator`` are injectable so tests
-    (and the endpoint's tests) drive it without a store, a model, or Ollama. ``harness`` gates the
-    ``none`` access strategy (FR-ACL-05) — the API never passes it, so a serving pipeline cannot
-    disable leak protection.
+    retriever and the generator are built. ``retriever``/``generator``/``rewriter`` are injectable
+    so tests (and the endpoint's tests) drive it without a store, a model, or Ollama. ``harness``
+    gates the ``none`` access strategy (FR-ACL-05) — the API never passes it, so a serving pipeline
+    cannot disable leak protection.
+
+    The query rewriter is built only on the real path (``retriever is None``) and only when
+    ``conversation.rewrite_queries`` is on — so a follow-up gets condensed when serving, while
+    injected-fake tests (all single-shot) stay free of any real LLM client. It is never *invoked*
+    without history, so building it cannot perturb a single-shot run.
     """
     if retriever is None:
         _require_index(cfg, domain_id)
         embedder = build_embedder(cfg.embedding)
         store = VectorStore(cfg.store, dimensions=embedder.dimensions)
         retriever = build_retriever(cfg, store, embedder)
+        if rewriter is None and cfg.conversation.rewrite_queries:
+            rewriter = build_query_rewriter(cfg)
     if generator is None:
         generator = build_generation_service(cfg)
     access = build_access_strategy(cfg.access_control, harness=harness)
-    return ChatPipeline(cfg, domain_id, retriever, generator, access)
+    return ChatPipeline(cfg, domain_id, retriever, generator, access, rewriter)

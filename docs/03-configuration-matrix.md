@@ -168,6 +168,24 @@ variant.
 | `relevance_granularity` | enum | `page` |
 | `paired_test` | enum | `wilcoxon` |
 
+### 2.9 `conversation` — serving only, **NOT** one of the hashed sections
+
+Multi-turn serving behaviour (Phase 8). Unlike the eight sections above, `conversation` is
+**excluded from `config_hash`** (see §1): no research question measures it, and every eval runs
+single-shot with no history, so these values never change a scored number. It is carried on the
+resolved config (so it is config-driven, CLAUDE.md rule 1) but kept out of `_SECTION_FIELDS`, so
+adding it left every existing RQ1/2/4 result's fingerprint untouched — pinned by the guardrail
+test `test_config_hash_unchanged_by_conversation`.
+
+| Key | Type | Default | Notes |
+|---|---|---|---|
+| `enabled` | bool | true | Whether the conversation layer (persistence + multi-turn) is active. |
+| `rewrite_queries` | bool | true | Condense a follow-up to a standalone query before retrieval (FR-GEN-09). No-op when history is empty. |
+| `rewrite_prompt_variant` | str | `condense_question` | Prompt (`prompts/<name>.md`) that does the condensing; reuses `generation.model`, pinned to `temperature 0.0`. |
+
+The Postgres DSN is deliberately absent here — persistence connection is infrastructure, read from
+`CHATBOT_POSTGRES_DSN` (like `CHATBOT_CHROMIUM_PATH`), not an experiment parameter.
+
 ---
 
 ## 3. Shipped configurations — the deliverable
