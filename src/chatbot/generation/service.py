@@ -21,6 +21,7 @@ from dataclasses import dataclass
 
 from chatbot.config.schema import ResolvedConfig
 from chatbot.generation.client import LLMClient, build_llm_client
+from chatbot.generation.history import Turn
 from chatbot.generation.prompts import load_prompt
 from chatbot.retrieval.base import RetrievedChunk
 
@@ -67,18 +68,38 @@ class GenerationService:
         self._client = client
         self._system = system_prompt
         self._abstention = cfg.generation.abstention_phrase
+        self._history_turns = cfg.generation.history_turns
 
-    def generate(self, question: str, chunks: list[RetrievedChunk]) -> GenerationResult:
+    def _history_messages(self, history: list[Turn]) -> list[dict[str, str]]:
+        """Flatten the most recent exchanges into chat messages, bounded by history_turns.
+
+        Only the last ``history_turns`` exchanges are kept (FR-GEN-07) — a context-window bound, so
+        a long conversation cannot grow the prompt unbounded. Each turn is a user/assistant pair.
+        """
+        recent = history[-self._history_turns :] if self._history_turns else []
+        messages: list[dict[str, str]] = []
+        for turn in recent:
+            messages.append({"role": "user", "content": turn.user})
+            messages.append({"role": "assistant", "content": turn.assistant})
+        return messages
+
+    def generate(
+        self, question: str, chunks: list[RetrievedChunk], *, history: list[Turn] | None = None
+    ) -> GenerationResult:
         # FR-GEN-06: nothing to ground on → refuse without consulting the LLM.
         if not chunks:
             return GenerationResult(answer=self._abstention, sources=[], grounded=False)
 
         user = f"{_numbered_context(chunks)}\n\nQuestion: {question}"
+        # Pass history only when there is some, so a single-shot call is byte-identical to before
+        # (the wire payload stays [system, user] — the property the RQ evals depend on).
+        prior = self._history_messages(history) if history else None
         answer = self._client.complete(
             system=self._system,
             user=user,
             temperature=self._cfg.generation.temperature,
             max_tokens=self._cfg.generation.max_tokens,
+            history=prior,
         )
         if is_abstention(answer, self._abstention):
             # A refusal cites nothing — never attach sources to it.

@@ -20,6 +20,20 @@ class PromptError(ValueError):
     """A missing or unreadable prompt template. Names the variant and the path tried."""
 
 
+def load_named_prompt(name: str, *, prompts_dir: Path = DEFAULT_PROMPTS_DIR) -> str:
+    """Return the raw text of ``prompts/<name>.md``, failing loud if it is absent.
+
+    The one file-reading path for prompts. ``load_prompt`` layers the ``{abstention_phrase}`` fill
+    on top for generation variants; the query-rewrite prompt (Phase 8) has no such slot and uses
+    this directly. A missing file raises rather than defaulting — a wrong or absent rewrite prompt
+    would silently degrade multi-turn retrieval, exactly the failure this refuses to hide.
+    """
+    path = prompts_dir / f"{name}.md"
+    if not path.is_file():
+        raise PromptError(f"no prompt template for variant {name!r} at {path}")
+    return path.read_text(encoding="utf-8")
+
+
 def load_prompt(
     variant: PromptVariant,
     *,
@@ -31,8 +45,6 @@ def load_prompt(
     Raises ``PromptError`` if the template file is absent — never silently substitutes a default,
     because a wrong prompt silently changes what is being measured (RQ1/RQ3 turn on the variant).
     """
-    path = prompts_dir / f"{variant.value}.md"
-    if not path.is_file():
-        raise PromptError(f"no prompt template for variant {variant.value!r} at {path}")
     # Literal replace (not str.format) so any other braces in the template are left untouched.
-    return path.read_text(encoding="utf-8").replace("{abstention_phrase}", abstention_phrase)
+    raw = load_named_prompt(variant.value, prompts_dir=prompts_dir)
+    return raw.replace("{abstention_phrase}", abstention_phrase)
