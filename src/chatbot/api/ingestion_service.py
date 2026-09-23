@@ -26,7 +26,7 @@ from typing import Protocol, runtime_checkable
 
 from chatbot.config.schema import EmbeddingConfig, IngestionConfig, ResolvedConfig, StoreConfig
 from chatbot.ingestion.crawler.base import CrawledPage, Crawler, build_crawler
-from chatbot.ingestion.pipeline import IngestResult, ingest
+from chatbot.ingestion.pipeline import IngestResult, ingest, load_corpus
 from chatbot.store.business import CRAWLING, Business, BusinessRegistry
 from chatbot.store.embedder import TextEmbedder, build_embedder
 from chatbot.store.vector import VectorStore
@@ -50,7 +50,13 @@ class IngestWorker(Protocol):
     """The heavy crawl+ingest step. Faked in tests so CI needs no browser, Qdrant, or model."""
 
     def run(
-        self, domain_id: str, root_url: str, *, max_pages: int | None, max_depth: int | None
+        self,
+        domain_id: str,
+        root_url: str,
+        *,
+        max_pages: int | None,
+        max_depth: int | None,
+        corpus_path: str | None = None,
     ) -> IngestOutcome: ...
 
 
@@ -78,16 +84,20 @@ class IngestionService:
         *,
         max_pages: int | None = None,
         max_depth: int | None = None,
+        corpus_path: str | None = None,
     ) -> Business:
         """Run the crawl+ingest and settle the registry. SYNC on purpose (Playwright, see module).
 
         Any failure — a disallowed robots path, a dead site, an empty crawl — is caught and recorded
         as ``failed`` with the reason, so a failed add never leaves a queryable-looking domain.
+        ``corpus_path`` ingests from a previously-saved crawl JSON instead of crawling live — the
+        demo's cached fallback when a live crawl is slow or unavailable.
         """
         self._registry.set_status(domain_id, CRAWLING)
         try:
             outcome = self._worker.run(
-                domain_id, root_url, max_pages=max_pages, max_depth=max_depth
+                domain_id, root_url, max_pages=max_pages, max_depth=max_depth,
+                corpus_path=corpus_path,
             )
         except Exception as exc:  # noqa: BLE001 - the reason is surfaced to the caller via the row
             return self._registry.mark_failed(domain_id, error=str(exc))
@@ -165,15 +175,30 @@ class CrawlIngestWorker:
         return path
 
     def run(
-        self, domain_id: str, root_url: str, *, max_pages: int | None, max_depth: int | None
+        self,
+        domain_id: str,
+        root_url: str,
+        *,
+        max_pages: int | None,
+        max_depth: int | None,
+        corpus_path: str | None = None,
     ) -> IngestOutcome:
-        """SYNC (Playwright). Crawl, persist the JSON, then ingest into the vector store."""
+        """SYNC (Playwright). Crawl, persist the JSON, then ingest — or, with ``corpus_path``, skip
+        the live crawl and ingest a previously-saved crawl JSON (the demo's cached fallback)."""
         run_cfg = self._cfg_with_bounds(max_pages, max_depth)
-        crawler = self._crawler_factory(run_cfg.ingestion)
-        pages = crawler.crawl(root_url)
-        manifest_path = self._persist_crawl(
-            domain_id, root_url, getattr(crawler, "backend", "unknown"), pages
-        )
+        if corpus_path is not None:
+            # Cached path: no network, no browser. The saved file IS the manifest; it was persisted
+            # (FR-CRAWL-09) on the live crawl that produced it, so nothing is re-written here.
+            pages = load_corpus(Path(corpus_path))
+            manifest = corpus_path
+        else:
+            crawler = self._crawler_factory(run_cfg.ingestion)
+            pages = crawler.crawl(root_url)
+            manifest = str(
+                self._persist_crawl(
+                    domain_id, root_url, getattr(crawler, "backend", "unknown"), pages
+                )
+            )
         embedder = self._embedder_factory(run_cfg.embedding)
         store = self._store_factory(run_cfg.store, embedder.dimensions)
         result = self._ingest_fn(
@@ -183,6 +208,6 @@ class CrawlIngestWorker:
             pages=pages,
             store=store,
             embedder=embedder,
-            crawl_manifest=str(manifest_path),
+            crawl_manifest=manifest,
         )
-        return IngestOutcome(chunk_count=result.chunk_count, crawl_manifest=str(manifest_path))
+        return IngestOutcome(chunk_count=result.chunk_count, crawl_manifest=manifest)

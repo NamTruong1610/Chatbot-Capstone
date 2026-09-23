@@ -57,6 +57,8 @@ class CrawlSiteRequest(BaseModel):
     display_name: str | None = None
     max_pages: int | None = Field(default=None, ge=1)
     max_depth: int | None = Field(default=None, ge=0)
+    # Cached fallback: ingest this saved crawl JSON instead of crawling live (the demo insurance).
+    corpus_path: str | None = None
 
 
 class BusinessOut(BaseModel):

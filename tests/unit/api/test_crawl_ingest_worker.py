@@ -13,6 +13,7 @@ browser, Qdrant, or model. These pin what the worker guarantees:
 from __future__ import annotations
 
 import inspect
+import json
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,53 @@ def test_crawl_json_is_persisted_before_ingest_and_is_reingestable(tmp_path: Pat
     assert len(persisted) == 1
     reloaded = load_corpus(persisted[0])
     assert [p.url for p in reloaded] == [p.url for p in PAGES]
+
+
+class ExplodingCrawler:
+    backend = "playwright"
+
+    def __init__(self, cfg: Any) -> None:
+        pass
+
+    def crawl(self, root_url: str) -> list[CrawledPage]:
+        raise AssertionError("cached-ingest path must NOT crawl live")
+
+
+def test_corpus_path_ingests_from_saved_json_without_crawling(tmp_path: Path) -> None:
+    # The demo's cached fallback: given a previously-saved crawl JSON, ingest it with no live crawl.
+    saved = tmp_path / "cutpro" / "crawl_20260101T000000.json"
+    saved.parent.mkdir(parents=True)
+    saved.write_text(
+        json.dumps({"pages": [{"url": p.url, "title": p.title, "text": p.text, "depth": p.depth}
+                              for p in PAGES]}),
+        encoding="utf-8",
+    )
+    seen: dict[str, Any] = {}
+
+    def recording_ingest(cfg: Any, **kwargs: Any) -> IngestResult:
+        seen["pages"] = kwargs["pages"]
+        seen["manifest"] = kwargs["crawl_manifest"]
+        fp = IndexFingerprint(
+            domain_id="cutpro", index_key="k", config_id=cfg.id, chunking_hash="h",
+            embedding_model="m", embedding_dimensions=384, crawl_manifest=kwargs["crawl_manifest"],
+            chunk_count=9, ingested_at="now",
+        )
+        return IngestResult(fingerprint=fp, chunk_count=9, by_type={})
+
+    worker = CrawlIngestWorker(
+        load_config("C0-baseline"), corpus_dir=tmp_path,
+        crawler_factory=lambda ing_cfg: ExplodingCrawler(ing_cfg),  # would raise if crawl ran
+        embedder_factory=lambda c: FakeEmbedder(),  # type: ignore[arg-type,return-value]
+        store_factory=lambda c, d: FakeStore(),  # type: ignore[arg-type,return-value]
+        ingest_fn=recording_ingest,
+    )
+    outcome = worker.run(
+        "cutpro", "https://cutpro.test", max_pages=None, max_depth=None, corpus_path=str(saved)
+    )
+
+    assert [p.url for p in seen["pages"]] == [p.url for p in PAGES]  # loaded from the saved JSON
+    assert seen["manifest"] == str(saved)  # the cached file is the manifest
+    assert outcome.chunk_count == 9
 
 
 def test_bounds_reach_the_crawler_via_ingestion_only(tmp_path: Path) -> None:

@@ -236,6 +236,7 @@ def create_app(
         background_tasks.add_task(
             svc.execute, request.domain_id, request.root_url,
             max_pages=request.max_pages, max_depth=request.max_depth,
+            corpus_path=request.corpus_path,
         )
         return _business_out(business)
 

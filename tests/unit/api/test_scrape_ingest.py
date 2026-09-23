@@ -36,12 +36,14 @@ class FakeWorker:
         self.calls: list[dict[str, Any]] = []
 
     def run(
-        self, domain_id: str, root_url: str, *, max_pages: Any = None, max_depth: Any = None
+        self, domain_id: str, root_url: str, *, max_pages: Any = None, max_depth: Any = None,
+        corpus_path: Any = None,
     ) -> Any:
         from chatbot.api.ingestion_service import IngestOutcome
 
         self.calls.append({"domain_id": domain_id, "root_url": root_url,
-                           "max_pages": max_pages, "max_depth": max_depth})
+                           "max_pages": max_pages, "max_depth": max_depth,
+                           "corpus_path": corpus_path})
         if self._exc is not None:
             raise self._exc
         return IngestOutcome(chunk_count=self._chunk_count)
@@ -134,6 +136,21 @@ def test_ingestion_without_admin_token_fails_closed_with_503() -> None:
     assert write.status_code == 503  # fail closed
     assert "not configured" in write.json()["detail"]
     assert read.status_code == 200  # the selector still works without a token
+
+
+def test_corpus_path_is_threaded_to_the_worker_for_cached_ingest() -> None:
+    # The demo's cached fallback: POST with corpus_path → the worker ingests that saved JSON
+    # instead of crawling live. Here we assert the endpoint threads it through.
+    client, registry, worker = _client_with_ingestion(token="s3cret")
+    cached = "data/corpora/cutpro/crawl_20260101T000000.json"
+    with client:
+        resp = client.post(
+            "/api/crawl/site", headers={"X-API-Key": "s3cret"},
+            json={"domain_id": CUTPRO, "root_url": CUTPRO_URL, "corpus_path": cached},
+        )
+    assert resp.json()["status"] == "pending"
+    assert worker.calls[0]["corpus_path"] == cached  # cached path reached the worker
+    assert registry.get(CUTPRO).status == "ready"
 
 
 def test_status_and_domains_endpoints() -> None:
