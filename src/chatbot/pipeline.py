@@ -35,6 +35,10 @@ class ChatAnswer:
     sources: list[str]
     grounded: bool
     leaked_chunks: int = 0  # private chunks that reached this role (must be 0 for a customer)
+    # The query actually sent to retrieval: the condensed standalone query on a rewritten
+    # follow-up, else the original question. Persisted as provenance (decision 7) so a bad
+    # multi-turn retrieval can be traced back to what it searched on.
+    search_query: str = ""
 
 
 class ChatPipeline:
@@ -92,7 +96,8 @@ class ChatPipeline:
         else:
             gen = self._generator.generate(question, permitted)
         return ChatAnswer(
-            answer=gen.answer, sources=gen.sources, grounded=gen.grounded, leaked_chunks=leaked
+            answer=gen.answer, sources=gen.sources, grounded=gen.grounded, leaked_chunks=leaked,
+            search_query=search_query,
         )
 
 
