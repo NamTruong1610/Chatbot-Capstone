@@ -49,7 +49,6 @@ class FakeWorker:
 
 def _service(worker: FakeWorker) -> Any:
     from chatbot.api.ingestion_service import IngestionService
-
     from chatbot.store.business import InMemoryBusinessRegistry
 
     registry = InMemoryBusinessRegistry()
