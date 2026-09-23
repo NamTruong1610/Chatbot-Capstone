@@ -18,11 +18,13 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 
 from chatbot.api.conversation import ConversationService
 from chatbot.api.ingestion_service import CrawlIngestWorker, IngestionService
+from chatbot.api.pipeline_registry import PipelineRegistry
 from chatbot.api.schemas import (
     BusinessOut,
     ChatRequest,
@@ -33,7 +35,7 @@ from chatbot.api.schemas import (
     MessageOut,
 )
 from chatbot.config.loader import load_config
-from chatbot.pipeline import ChatPipeline, build_chat_pipeline
+from chatbot.pipeline import ChatPipeline, IndexNotReadyError, build_chat_pipeline
 from chatbot.store.business import (
     Business,
     PostgresBusinessRegistry,
@@ -63,6 +65,7 @@ def create_app(
     pipeline: ChatPipeline | None = None,
     store: ConversationStore | None = None,
     ingestion_service: IngestionService | None = None,
+    pipeline_registry: PipelineRegistry | None = None,
     admin_token: str | None = None,
 ) -> FastAPI:
     """Build the app. ``pipeline``/``store``/``ingestion_service`` are injectable so tests drive the
@@ -79,6 +82,10 @@ def create_app(
     )
     state: dict[str, ConversationService | None] = {"service": None}
     ingestion_state: dict[str, IngestionService | None] = {"service": ingestion_service}
+    # Multi-domain routing (Phase 9): the default domain is served by state["service"] exactly as
+    # before; other domains are served through a PipelineRegistry, each pipeline built once and
+    # cached, wrapped in a per-domain ConversationService sharing the one store.
+    routing: dict[str, Any] = {"provider": pipeline_registry, "store": store, "cache": {}}
     if pipeline is not None:
         state["service"] = ConversationService(
             pipeline, store, domain_id=domain_id, history_turns=cfg.generation.history_turns
@@ -100,6 +107,10 @@ def create_app(
                 built_pipeline, built_store, domain_id=domain_id,
                 history_turns=cfg.generation.history_turns,
             )
+            # Non-default domains (businesses added at runtime) are served through the registry,
+            # sharing the one conversation store. The default pipeline built above is not re-built.
+            routing["store"] = built_store
+            routing["provider"] = PipelineRegistry(cfg)
             if ingestion_state["service"] is None:
                 # Build the registry (same Postgres) and reconcile CLI-ingested domains
                 # (Wyatt/Austral) so GET /api/domains lists every queryable business, not only
@@ -125,6 +136,37 @@ def create_app(
             raise HTTPException(status_code=503, detail="ingestion not available")
         return service
 
+    def _conversation_for(target_domain: str) -> ConversationService:
+        """The ConversationService for one domain. The default domain uses the pre-built service
+        (the single-domain path, unchanged); other domains are built once via the registry and
+        cached. An uningested domain raises IndexNotReadyError → 404; a single-domain server (no
+        registry) rejects any non-default domain → 400."""
+        if target_domain == domain_id:
+            return _service()
+        provider: PipelineRegistry | None = routing["provider"]
+        if provider is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"this server serves domain {domain_id!r}, not {target_domain!r}",
+            )
+        cache: dict[str, ConversationService] = routing["cache"]
+        cached = cache.get(target_domain)
+        if cached is not None:
+            return cached  # second request to a domain reuses the built pipeline — no rebuild
+        try:
+            pipe = provider.get(target_domain)  # fingerprint guard fires here on first access
+        except IndexNotReadyError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail=f"domain {target_domain!r} is not ingested/ready: {exc}",
+            ) from exc
+        conversation = ConversationService(
+            pipe, routing["store"], domain_id=target_domain,
+            history_turns=cfg.generation.history_turns,
+        )
+        cache[target_domain] = conversation
+        return conversation
+
     def _require_admin(x_api_key: str | None) -> None:
         # Fail closed: with no token configured the write endpoints are refused, not wide open.
         if resolved_admin_token is None:
@@ -149,13 +191,10 @@ def create_app(
 
     @app.post("/api/chat/message", response_model=ChatResponse, response_model_exclude_none=True)
     def chat_message(request: ChatRequest) -> ChatResponse:
-        if request.domain_id is not None and request.domain_id != domain_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"this server serves domain {domain_id!r}, not {request.domain_id!r}",
-            )
+        target_domain = request.domain_id or domain_id
+        conversation = _conversation_for(target_domain)  # 400 (unserved) / 404 (not ingested)
         try:
-            answer, session_id = _service().reply(
+            answer, session_id = conversation.reply(
                 request.message, session_id=request.session_id, role=request.role
             )
         except ConversationScopeError as exc:
