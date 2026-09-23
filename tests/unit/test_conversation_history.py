@@ -43,7 +43,9 @@ class KeywordRetriever:
     def retrieve(
         self, query: str, *, domain_id: str, allowed_levels: set[str] | None = None
     ) -> RetrievalResult:
-        self.calls.append({"query": query, "domain_id": domain_id, "allowed_levels": allowed_levels})
+        self.calls.append(
+            {"query": query, "domain_id": domain_id, "allowed_levels": allowed_levels}
+        )
         hit = "diploma" in query.casefold()
         return RetrievalResult(chunks=[DIPLOMA_CHUNK] if hit else [], latency_ms=1.0)
 
@@ -52,7 +54,7 @@ class KeywordRetriever:
 
 
 class FakeGenerator:
-    """Records the chunks AND the history it was handed, so the pipeline's threading is assertable."""
+    """Records the chunks AND the history it was handed, so the threading is assertable."""
 
     def __init__(self, result: GenerationResult) -> None:
         self._result = result
@@ -66,7 +68,9 @@ class FakeGenerator:
         self.seen_history = history
         # Abstain when nothing was retrieved, mirroring the real service's FR-GEN-06 behaviour.
         if not chunks:
-            return GenerationResult(answer="I do not have that information.", sources=[], grounded=False)
+            return GenerationResult(
+                answer="I do not have that information.", sources=[], grounded=False
+            )
         return self._result
 
 
@@ -140,8 +144,8 @@ def test_single_shot_never_rewrites_and_retrieval_sees_raw_query() -> None:
 
 
 def test_history_is_threaded_into_generation() -> None:
-    """The original question plus history reach the generator (so the model answers conversationally
-    and resolves pronouns in its wording); retrieval used the rewrite, generation uses the history."""
+    """The original question plus history reach the generator (so the model answers
+    conversationally); retrieval used the rewrite, generation uses the history."""
     from chatbot.pipeline import build_chat_pipeline
 
     cfg = load_config("C0-baseline")
