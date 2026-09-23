@@ -35,7 +35,9 @@ class FakeWorker:
         self._exc = exc
         self.calls: list[dict[str, Any]] = []
 
-    def run(self, domain_id: str, root_url: str, *, max_pages: Any = None, max_depth: Any = None) -> Any:
+    def run(
+        self, domain_id: str, root_url: str, *, max_pages: Any = None, max_depth: Any = None
+    ) -> Any:
         from chatbot.api.ingestion_service import IngestOutcome
 
         self.calls.append({"domain_id": domain_id, "root_url": root_url,
@@ -47,6 +49,7 @@ class FakeWorker:
 
 def _service(worker: FakeWorker) -> Any:
     from chatbot.api.ingestion_service import IngestionService
+
     from chatbot.store.business import InMemoryBusinessRegistry
 
     registry = InMemoryBusinessRegistry()

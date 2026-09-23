@@ -68,3 +68,13 @@ def read_fingerprint(
     registry = json.loads(path.read_text(encoding="utf-8"))
     record = registry.get(_key(domain_id, index_key))
     return IndexFingerprint(**record) if record is not None else None
+
+
+def list_fingerprints(*, base_dir: Path = DEFAULT_INDEX_DIR) -> list[IndexFingerprint]:
+    """Every recorded fingerprint. Lets the business registry surface CLI-ingested domains
+    (e.g. Wyatt/Austral) that were never added through the scrape endpoint (Phase 9)."""
+    path = _registry_path(base_dir)
+    if not path.exists():
+        return []
+    registry = json.loads(path.read_text(encoding="utf-8"))
+    return [IndexFingerprint(**record) for record in registry.values()]
