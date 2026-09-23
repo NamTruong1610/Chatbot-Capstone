@@ -30,8 +30,19 @@ lint:
 test:
 	$(BIN)/pytest
 
+# Bring up the backing services (Postgres for conversation history, Qdrant for vectors).
+# Redis is deferred (OD-16: Postgres is the live conversation store this phase).
+services:
+	docker compose up -d
+
+# Run the API with autoreload. --factory because create_app() is an app factory. Needs an
+# ingested index (fingerprint guard) and, with conversation enabled, CHATBOT_POSTGRES_DSN
+# pointing at a running Postgres (see `make services`).
+dev:
+	$(BIN)/uvicorn chatbot.api.main:create_app --factory --reload
+
 # --- Later phases: defined so the surface is visible, but not yet built. ---
-dev services crawl eval sweep:
+crawl eval sweep:
 	@echo "make $@ is not implemented yet — see docs/07-build-plan.md" && exit 1
 
 clean:

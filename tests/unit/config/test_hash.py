@@ -60,7 +60,7 @@ def test_config_hash_unchanged_by_conversation() -> None:
 
 def test_conversation_block_is_not_in_the_hashed_surface() -> None:
     """`conversation` is carried on the resolved config but excluded from the hashed sections —
-    it is a serving concern no RQ measures (FR-GEN-08)."""
+    it is a serving concern no RQ measures (FR-GEN-09)."""
     cfg = load_config("C0-baseline")
     assert cfg.conversation.rewrite_queries is True  # it is present and readable
     assert "conversation" not in cfg.parameter_sections()  # but not in the hashed surface

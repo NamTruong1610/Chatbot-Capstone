@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS messages (
     -- Provenance for assistant turns (null on user turns):
     grounded        BOOLEAN,
     sources         JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    -- The standalone query the follow-up was condensed to before retrieval (FR-GEN-08) — kept so
+    -- The standalone query the follow-up was condensed to before retrieval (FR-GEN-09) — kept so
     -- a bad multi-turn retrieval can be traced back to its rewrite (decision 7).
     search_query    TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -272,6 +272,76 @@ library versions of embedding/rerank/LLM. Without this a result is not reproduci
 }
 ```
 
+**Implemented subset (Phase 8).** The endpoint currently returns
+`{answer, sources (URL strings), grounded, session_id?}` — the richer `reply`/`retrieval`
+telemetry above is aspirational and not yet wired. `session_id` is **omitted** from the response
+of a stateless request (no `session_id` in the body), so an existing single-shot caller receives
+exactly `{answer, sources, grounded}` unchanged; it is echoed when the turn is part of a
+conversation. `role` and `domain_id` remain optional; a `domain_id` that does not match the
+server's configured domain is a 400.
+
+**Session semantics (decision 5).** Omitting `session_id` → stateless single-shot (nothing
+persisted). Providing one → the turn joins that conversation: history is loaded, the follow-up is
+condensed (FR-GEN-09), and both messages are persisted. The client supplies the id (any fresh
+string) on the first turn; the server creates the conversation on first sight. A `session_id`
+reused under a different `role`/`domain_id` than it was created with is refused **403**
+(fail-closed scope, RQ2 isolation in the conversation layer).
+
+### `GET /api/chat/conversation/{session_id}`
+
+Returns the stored message log for a conversation. No API key (chat is unauthenticated, FR-API-02).
+
+```json
+{
+  "session_id": "uuid",
+  "messages": [
+    {"turn_index": 0, "sender": "user", "content": "Tell me about the Diploma of Business",
+     "grounded": null, "sources": [], "search_query": null},
+    {"turn_index": 1, "sender": "assistant", "content": "It is a 12-month course…",
+     "grounded": true, "sources": ["https://…/courses"],
+     "search_query": "Tell me about the Diploma of Business"}
+  ]
+}
+```
+
+---
+
+## 7. Conversation store (Postgres)
+
+The live store for multi-turn chat (Phase 8, OD-16). Two tables; DDL in
+`db/conversation_schema.sql` (the single source of truth `ensure_schema()` runs at startup,
+idempotent). The DSN is infrastructure, read from `CHATBOT_POSTGRES_DSN` — **not** a config
+section, so it never enters `config_hash`. This store is **not** a results contract: it holds
+serving state, and no research question reads it, so changing it does not invalidate any RQ result.
+
+### 7.1 `conversations`
+
+| Column | Type | Notes |
+|---|---|---|
+| `conversation_id` | `text` PK | Client-supplied on the first turn (the `session_id`). |
+| `domain_id` | `text` | Fixed at creation. |
+| `role` | `text` | Fixed at creation. A mismatched reuse fails closed (403). |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Touched on each append. |
+
+### 7.2 `messages`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigserial` PK | |
+| `conversation_id` | `text` | FK → `conversations`. |
+| `turn_index` | `int` | 0-based position; `UNIQUE(conversation_id, turn_index)`. |
+| `sender` | `text` | `user` \| `assistant` (CHECK-constrained). |
+| `content` | `text` | The message text. |
+| `grounded` | `bool` | Assistant turns only; null on user turns. |
+| `sources` | `jsonb` | List of source URLs; `[]` on user turns. |
+| `search_query` | `text` | The standalone query the follow-up was condensed to (FR-GEN-09), for tracing a bad multi-turn retrieval back to its rewrite. Null on user turns / first turns without a rewrite. |
+| `created_at` | `timestamptz` | Default `now()`. |
+
+A conversation's history is reconstructed by pairing each `user` message with the `assistant`
+reply that follows it, bounded to the last `generation.history_turns` completed exchanges. A
+trailing user message with no reply yet contributes no exchange.
+
 `grounded: false` means retrieval returned nothing and the abstention phrase was
 returned without an LLM call (FR-GEN-06).
 

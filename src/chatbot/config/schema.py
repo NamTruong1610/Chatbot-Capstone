@@ -312,7 +312,7 @@ class EvaluationConfig(_Section):
 
 
 class ConversationConfig(_Section):
-    """Multi-turn serving behaviour (Phase 8, FR-GEN-08). **Not an experimental section.**
+    """Multi-turn serving behaviour (Phase 8, FR-GEN-09). **Not an experimental section.**
 
     This governs the demo chatbot's conversation layer — whether follow-ups are condensed to a
     standalone query before retrieval, and which prompt does the condensing. It is a *serving*

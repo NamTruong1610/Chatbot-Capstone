@@ -1,6 +1,6 @@
 """Query rewriting: condense a context-dependent follow-up into a standalone retrieval query.
 
-The engineering crux of multi-turn RAG (FR-GEN-08). A follow-up like "how much is it?" embeds to
+The engineering crux of multi-turn RAG (FR-GEN-09). A follow-up like "how much is it?" embeds to
 nothing useful — "it" has no referent — so retrieval on the raw message fails. This stage uses the
 conversation history to rewrite the follow-up into a self-contained query ("how much is the Diploma
 of Business?") *before* retrieval. Retrieval then runs on the rewrite; generation still sees the
@@ -24,6 +24,13 @@ from chatbot.config.schema import ResolvedConfig
 from chatbot.generation.client import LLMClient, build_llm_client
 from chatbot.generation.history import Turn
 from chatbot.generation.prompts import load_named_prompt
+
+# Query rewriting is a precision task with one correct output — the standalone form of the
+# follow-up. It must be reproducible (CLAUDE.md rule 3), so it is pinned to greedy decoding
+# regardless of generation.temperature: an answer-generation temperature (which a serving config
+# may raise for style) must never leak into retrieval and make the rewrite non-deterministic.
+# This is a determinism invariant, not a tunable pipeline parameter, so it is fixed here.
+_REWRITE_TEMPERATURE = 0.0
 
 
 @runtime_checkable
@@ -58,9 +65,9 @@ class LLMQueryRewriter:
     def __init__(self, cfg: ResolvedConfig, client: LLMClient, system_prompt: str) -> None:
         self._client = client
         self._system = system_prompt
-        # Reused from generation so the rewrite is config-driven and deterministic (no hardcoded
-        # temperature/limit — rule 1); history_turns bounds how much context to condense on.
-        self._temperature = cfg.generation.temperature
+        # max_tokens is reused from generation (a length bound, plenty for a short query);
+        # temperature is pinned to 0.0 above — the rewrite never inherits a nonzero answer
+        # temperature. history_turns bounds how much context to condense on.
         self._max_tokens = cfg.generation.max_tokens
         self._history_turns = cfg.generation.history_turns
 
@@ -76,7 +83,7 @@ class LLMQueryRewriter:
         rewritten = self._client.complete(
             system=self._system,
             user=user,
-            temperature=self._temperature,
+            temperature=_REWRITE_TEMPERATURE,
             max_tokens=self._max_tokens,
         )
         return _clean(rewritten, fallback=question)

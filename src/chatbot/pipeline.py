@@ -71,7 +71,7 @@ class ChatPipeline:
         # closed inside levels_for (rule 4).
         role = role or _DEFAULT_ROLE
 
-        # Condense-before-retrieve (FR-GEN-08): a context-dependent follow-up ("how much is it?")
+        # Condense-before-retrieve (FR-GEN-09): a context-dependent follow-up ("how much is it?")
         # is rewritten to a standalone query using the history BEFORE it hits retrieval. This runs
         # ONLY when there is history and rewriting is enabled — a single-shot request retrieves on
         # the raw question, byte-for-byte as before, so every RQ eval number is untouched.

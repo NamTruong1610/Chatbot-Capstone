@@ -1,4 +1,4 @@
-"""LLMQueryRewriter: condense a follow-up to a standalone query (FR-GEN-08).
+"""LLMQueryRewriter: condense a follow-up to a standalone query (FR-GEN-09).
 
 Driven by a fake LLM client — no Ollama, no network. These pin the plumbing the rewriter owns:
 when it fires, what transcript it shows the model, and how it cleans and floors the output. The
@@ -50,10 +50,22 @@ def test_condenses_using_history_and_shows_the_model_the_transcript() -> None:
     # The transcript AND the follow-up reach the model, so it can resolve "it".
     assert "Diploma of Business" in call["user"]
     assert "how much is it?" in call["user"]
-    # Determinism: the rewrite runs at the config temperature (0.0 in baseline), rule 3.
+    # Determinism: the rewrite is pinned to greedy decoding, rule 3.
     assert call["temperature"] == 0.0
     # The condense prompt (not strict_grounded) is the system message.
     assert "standalone search query" in call["system"]
+
+
+def test_rewrite_temperature_is_pinned_independent_of_generation_temperature() -> None:
+    # A serving config may raise generation.temperature for answer style; the rewrite must stay
+    # deterministic regardless — it is a precision task with one correct output.
+    fake = FakeLLMClient("How much is the Diploma of Business?")
+    cfg = load_config("C0-baseline")
+    cfg.generation.temperature = 0.9  # would leak into the rewrite if it were not pinned
+    history = [Turn(user="Tell me about the Diploma", assistant="A 12-month course.")]
+    build_query_rewriter(cfg, fake).rewrite("how much?", history)
+    (call,) = fake.calls
+    assert call["temperature"] == 0.0  # pinned, not inherited
 
 
 def test_strips_wrapping_quotes_the_model_may_add() -> None:
