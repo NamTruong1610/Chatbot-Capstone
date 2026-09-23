@@ -78,14 +78,6 @@ def test_worker_failure_marks_domain_failed_not_ready() -> None:
     assert "robots" in business.error
 
 
-def _client_with_ingestion(token: str | None) -> TestClient:
-    pipe = _FakePipeline()
-    svc, _ = _service(FakeWorker(chunk_count=1))
-    return TestClient(
-        create_app(pipeline=pipe, ingestion_service=svc, admin_token=token)  # type: ignore[arg-type]
-    )
-
-
 class _FakePipeline:
     domain_id = "wyatt-edu"
 
@@ -93,12 +85,68 @@ class _FakePipeline:
         return ChatAnswer("x", [], True)
 
 
+def _client_with_ingestion(token: str | None) -> tuple[TestClient, Any, FakeWorker]:
+    worker = FakeWorker(chunk_count=1)
+    svc, registry = _service(worker)
+    app = create_app(
+        pipeline=_FakePipeline(),  # type: ignore[arg-type]
+        ingestion_service=svc, admin_token=token,
+    )
+    return TestClient(app), registry, worker
+
+
 def test_crawl_endpoint_requires_the_api_key() -> None:
     body = {"domain_id": CUTPRO, "root_url": CUTPRO_URL}
-    with _client_with_ingestion(token="s3cret") as client:
+    client, _, _ = _client_with_ingestion(token="s3cret")
+    with client:
         no_key = client.post("/api/crawl/site", json=body)
         wrong = client.post("/api/crawl/site", headers={"X-API-Key": "nope"}, json=body)
         right = client.post("/api/crawl/site", headers={"X-API-Key": "s3cret"}, json=body)
     assert no_key.status_code in (401, 403)  # missing key refused
     assert wrong.status_code in (401, 403)  # wrong key refused
     assert right.status_code < 400  # correct key accepted (returns the pending job)
+
+
+def test_post_returns_pending_then_the_background_task_runs_the_crawl() -> None:
+    # The POST must not block on a minutes-long crawl: it returns `pending` immediately, and the
+    # crawl+ingest runs off the request as a background task.
+    client, registry, worker = _client_with_ingestion(token="s3cret")
+    body = {"domain_id": CUTPRO, "root_url": CUTPRO_URL, "max_pages": 8}
+    with client:
+        resp = client.post("/api/crawl/site", headers={"X-API-Key": "s3cret"}, json=body)
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "pending"  # the response did NOT wait for the crawl result
+    # The background task ran off the response path: the worker was invoked and the domain settled.
+    assert worker.calls and worker.calls[0]["max_pages"] == 8
+    assert registry.get(CUTPRO).status == "ready"
+
+
+def test_ingestion_without_admin_token_fails_closed_with_503() -> None:
+    # No token configured → the WRITE endpoint refuses (503), never wide open. Reads stay open.
+    client, _, _ = _client_with_ingestion(token=None)
+    with client:
+        write = client.post(
+            "/api/crawl/site", headers={"X-API-Key": "anything"},
+            json={"domain_id": CUTPRO, "root_url": CUTPRO_URL},
+        )
+        read = client.get("/api/domains")
+    assert write.status_code == 503  # fail closed
+    assert "not configured" in write.json()["detail"]
+    assert read.status_code == 200  # the selector still works without a token
+
+
+def test_status_and_domains_endpoints() -> None:
+    client, _, _ = _client_with_ingestion(token="s3cret")
+    with client:
+        client.post(
+            "/api/crawl/site", headers={"X-API-Key": "s3cret"},
+            json={"domain_id": CUTPRO, "root_url": CUTPRO_URL, "display_name": "CutPro"},
+        )
+        status = client.get(f"/api/crawl/site/{CUTPRO}")
+        domains = client.get("/api/domains")
+        missing = client.get("/api/crawl/site/nope")
+
+    assert status.status_code == 200 and status.json()["status"] == "ready"
+    assert CUTPRO in {d["domain_id"] for d in domains.json()["domains"]}
+    assert missing.status_code == 404

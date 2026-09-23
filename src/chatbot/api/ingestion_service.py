@@ -93,6 +93,14 @@ class IngestionService:
             return self._registry.mark_failed(domain_id, error=str(exc))
         return self._registry.mark_ready(domain_id, chunk_count=outcome.chunk_count)
 
+    def get_status(self, domain_id: str) -> Business | None:
+        """The current state of one business (backs the status endpoint)."""
+        return self._registry.get(domain_id)
+
+    def list_businesses(self) -> list[Business]:
+        """Every registered business (backs GET /api/domains and the selector)."""
+        return self._registry.list_all()
+
 
 def _default_store(store_cfg: StoreConfig, dimensions: int) -> VectorStore:
     return VectorStore(store_cfg, dimensions=dimensions)

@@ -57,8 +57,8 @@ def _worker(tmp_path: Path, ingest_fn: Any) -> CrawlIngestWorker:
         load_config("C0-baseline"),
         corpus_dir=tmp_path,
         crawler_factory=lambda ing_cfg: FakeCrawler(ing_cfg),
-        embedder_factory=lambda emb_cfg: FakeEmbedder(),
-        store_factory=lambda store_cfg, dims: FakeStore(),
+        embedder_factory=lambda emb_cfg: FakeEmbedder(),  # type: ignore[arg-type,return-value]
+        store_factory=lambda store_cfg, dims: FakeStore(),  # type: ignore[arg-type,return-value]
         ingest_fn=ingest_fn,
     )
 
@@ -123,8 +123,8 @@ def test_bounds_reach_the_crawler_via_ingestion_only(tmp_path: Path) -> None:
     worker = CrawlIngestWorker(
         load_config("C0-baseline"), corpus_dir=tmp_path,
         crawler_factory=capturing_crawler,
-        embedder_factory=lambda c: FakeEmbedder(),
-        store_factory=lambda c, d: FakeStore(),
+        embedder_factory=lambda c: FakeEmbedder(),  # type: ignore[arg-type,return-value]
+        store_factory=lambda c, d: FakeStore(),  # type: ignore[arg-type,return-value]
         ingest_fn=noop_ingest,
     )
     worker.run("cutpro", "https://cutpro.test", max_pages=7, max_depth=1)

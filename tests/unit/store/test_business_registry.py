@@ -140,7 +140,8 @@ def test_reconcile_does_not_overwrite_a_tracked_domain() -> None:
     registry.start("cutpro", root_url="https://cutpro.test")
     registry.set_status("cutpro", INGESTING)
     reconcile_fingerprints(registry, [_fp("cutpro", 999)])
-    assert registry.get("cutpro").status == INGESTING  # not clobbered to ready
+    tracked = registry.get("cutpro")
+    assert tracked is not None and tracked.status == INGESTING  # not clobbered to ready
 
 
 def test_list_fingerprints_reads_the_on_disk_registry(tmp_path: Path) -> None:
@@ -155,5 +156,6 @@ def test_reconcile_from_disk_end_to_end(tmp_path: Path) -> None:
     write_fingerprint(_fp("wyatt-edu", 812), base_dir=tmp_path)
     registry = InMemoryBusinessRegistry()
     reconcile_fingerprints(registry, list_fingerprints(base_dir=tmp_path))
-    assert isinstance(registry.get("wyatt-edu"), Business)
-    assert registry.get("wyatt-edu").status == READY
+    wyatt = registry.get("wyatt-edu")
+    assert isinstance(wyatt, Business)
+    assert wyatt.status == READY
