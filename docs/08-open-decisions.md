@@ -503,3 +503,39 @@ is pinned to `temperature 0.0` for determinism, independent of `generation.tempe
 **Deferred to later phases:** Redis hot-path + TTL; summary-on-session-end / long-conversation
 compression; per-conversation auth on the history-fetch endpoint (chat is unauthenticated today,
 FR-API-02).
+
+---
+
+## OD-17 — Scrape-to-ingest endpoint + multi-domain serving (Phase 9)
+
+**Status:** ☑ Resolved 2026-09-23 · **Decider:** you (approved in the phase plan) · **Blocked:**
+the "add a business" capability of the A+ app
+
+**Question.** Add a business over HTTP (crawl→ingest) instead of only via the CLI, and serve the
+added domain in chat. What endpoint, where does orchestration live, how is a long crawl handled,
+how much auth, and how is the demo made reliable?
+
+**Decisions (all approved):**
+
+1. **Endpoint = the documented `POST /api/crawl/site`** (docs/05 §6, FR-API-02), not a new
+   `/api/admin/ingest`. Its response is changed from synchronous counts to an **async job/status**
+   (`BusinessOut`, `pending` → poll `GET /api/crawl/site/{domain_id}`). Recorded as FR-API-05.
+2. **Orchestration in `api/`** (`IngestionService` + `CrawlIngestWorker`) composing the existing
+   crawler + ingest + store unchanged. The worker is a **plain `def`** (Playwright's sync API
+   cannot run in an event loop) run via `BackgroundTasks` in the threadpool.
+3. **Registry = one Postgres `businesses` table** (same DB as conversations), status column
+   doubling as the ingest-job state; CLI-ingested domains (Wyatt/Austral) reconciled from the
+   fingerprint registry at startup so `GET /api/domains` lists all three.
+4. **Multi-domain serving is included** (a per-domain `PipelineRegistry`, lazy + cached,
+   fingerprint-guarded) — without it an added domain ingests into a void. Purely additive: the
+   default domain path is byte-identical, an uningested domain returns 404.
+5. **Fingerprint integrity protected.** Admin ingests run under **C0-baseline**; the optional
+   `max_pages`/`max_depth` bounds touch only `ingestion`, so `index_key` and every RQ1/2/4
+   fingerprint stay byte-identical. CutPro is a demo/serving domain, never an RQ subject.
+6. **Demo-grade auth (FR-API-02):** `X-API-Key` vs `CHATBOT_ADMIN_TOKEN`; unset → write endpoints
+   **fail closed (503)**, reads stay open. Real per-business/role auth is out of scope.
+7. **Cached fallback for the live demo:** the crawl JSON is persisted (FR-CRAWL-09) and can be
+   re-ingested via `corpus_path` with no live crawl — insurance against a slow/unreachable site.
+
+**Deferred:** document upload (web-scrape only this phase); the selector UI; summarisation;
+per-business auth.

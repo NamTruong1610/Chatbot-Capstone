@@ -345,23 +345,82 @@ trailing user message with no reply yet contributes no exchange.
 `grounded: false` means retrieval returned nothing and the abstention phrase was
 returned without an LLM call (FR-GEN-06).
 
-### `POST /api/crawl/site`
+### `POST /api/crawl/site` — add a business (FR-API-05)
+
+Crawls a URL, ingests it, and registers the domain. **Asynchronous:** the crawl runs as a
+background task (it can take minutes), so the endpoint returns at once with the business in
+`pending` state; poll `GET /api/crawl/site/{domain_id}` for progress. Requires `X-API-Key`
+(FR-API-02); with no admin token configured it fails closed (503).
 
 ```json
-// request
-{"domain_id": "domain-a", "root_url": "https://…", "config_id": "C0-baseline"}
-
-// response
+// request  (bounds and corpus_path optional)
 {
-  "domain_id": "domain-a",
-  "document_id": "site:https://…",
-  "manifest_path": "data/corpora/domain-a/crawl_20260801T0912.json",
-  "pages_crawled": 37,
-  "workflows_found": 6,
-  "chunks_stored": 1284,
-  "chunks_by_type": {"prose": 1180, "table": 62, "qa": 36, "workflow": 6},
-  "index_fingerprint": {"chunking_hash": "…", "embedding_model": "…"}
+  "domain_id": "cutpro", "root_url": "https://…", "display_name": "CutPro",
+  "max_pages": 12, "max_depth": 2,
+  "corpus_path": null
 }
+
+// response (immediate) — a BusinessOut, status "pending"
+{"domain_id": "cutpro", "display_name": "CutPro", "root_url": "https://…",
+ "status": "pending", "chunk_count": 0, "error": null}
 ```
 
-Requires `X-API-Key`.
+`corpus_path` is the **cached fallback**: set it to a previously-saved crawl JSON
+(`data/corpora/<domain_id>/crawl_<ts>.json`, persisted on an earlier live crawl per FR-CRAWL-09)
+to re-ingest without crawling — the demo's insurance against a slow or unreachable site. Bounds
+(`max_pages`/`max_depth`) apply only to `ingestion`, so `index_key` and every RQ fingerprint are
+unchanged. Robots and the control blocklist are honoured and not bypassable (FR-CRAWL-05/07).
+
+### `GET /api/crawl/site/{domain_id}` — ingest status
+
+Returns the `BusinessOut` for the domain (`pending` → `crawling` → `ready` | `failed`, with
+`chunk_count` and `error`), or 404 if unknown. `failed` carries the reason; a failed add never
+leaves a queryable-looking domain.
+
+### `GET /api/domains` — the business registry
+
+Read-only (no key — the future selector reads it). Lists every queryable business: those added
+through the endpoint plus those ingested via the CLI (Wyatt, Austral), reconciled from the
+fingerprint registry at startup.
+
+```json
+{"domains": [
+  {"domain_id": "wyatt-edu", "display_name": "wyatt-edu", "root_url": "",
+   "status": "ready", "chunk_count": 812, "error": null},
+  {"domain_id": "cutpro", "display_name": "CutPro", "root_url": "https://…",
+   "status": "ready", "chunk_count": 96, "error": null}
+]}
+```
+
+A chat request (`POST /api/chat/message`) with a `domain_id` is served by that domain's pipeline,
+built once and cached; a domain with no index returns **404** (not a crash).
+
+The `businesses` table backing all three is in §8.
+
+---
+
+## 8. Business registry (Postgres)
+
+One row per business/domain the app knows about (Phase 9, FR-API-05). DDL in
+`db/business_schema.sql`, idempotent, run at startup on the same Postgres as the conversation
+store. **Not a results contract** — it holds serving state, no research question reads it, so
+changing it invalidates no RQ result. The `status` column doubles as the async ingest-job state,
+so a long crawl's progress is durable and pollable without a separate jobs table.
+
+### 8.1 `businesses`
+
+| Column | Type | Notes |
+|---|---|---|
+| `domain_id` | `text` PK | The domain; endpoint-supplied or CLI-reconciled. |
+| `display_name` | `text` | For the selector; defaults to `domain_id`. |
+| `root_url` | `text` | The crawl root (empty for CLI-reconciled domains). |
+| `status` | `text` | `pending` → `crawling` → `ready` \| `failed`. |
+| `chunk_count` | `int` | Chunks ingested (0 until `ready`). |
+| `error` | `text` | The failure reason on `failed`; null otherwise. |
+| `created_at` | `timestamptz` | Default `now()`. |
+| `updated_at` | `timestamptz` | Touched on each state change. |
+
+CLI-ingested domains (Wyatt, Austral) have no row until reconciled: at startup every fingerprint
+in `data/index/fingerprints.json` without a row is inserted as `ready` with its chunk count, so
+`GET /api/domains` lists all businesses, not only endpoint-added ones. A domain the registry
+already tracks (e.g. an in-flight add) is never overwritten by a stale fingerprint.

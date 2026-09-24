@@ -82,14 +82,15 @@ the repo, because it is what keeps the configuration matrix honest: a reader of
 │   ├── store/
 │   │   ├── vector.py              # Qdrant adapter — the ONLY module that
 │   │   │                          #   imports qdrant_client (FR-STORE-01)
-│   │   ├── session.py             # Redis
-│   │   └── summary.py             # Postgres
+│   │   ├── conversation.py        # Postgres: conversation history (Phase 8)
+│   │   └── business.py            # Postgres: domain/business registry (Phase 9)
 │   │
 │   ├── api/
-│   │   ├── main.py                # FastAPI app, lifespan, middleware
-│   │   ├── routes/                # chat, ingest, crawl, admin
-│   │   ├── schemas/               # request/response models
-│   │   └── deps.py                # config injection
+│   │   ├── main.py                # FastAPI app factory, lifespan, routes
+│   │   ├── schemas.py             # request/response models
+│   │   ├── conversation.py        # ConversationService: load→answer→persist (Phase 8)
+│   │   ├── ingestion_service.py   # IngestionService + CrawlIngestWorker (Phase 9)
+│   │   └── pipeline_registry.py   # per-domain pipeline cache (Phase 9)
 │   │
 │   └── evaluation/
 │       ├── testset.py             # golden test set loading + validation

@@ -47,3 +47,30 @@ class MessageOut(BaseModel):
 class ConversationHistoryResponse(BaseModel):
     session_id: str
     messages: list[MessageOut]
+
+
+class CrawlSiteRequest(BaseModel):
+    """Body for POST /api/crawl/site (FR-API-05). Optional bounds keep a demo crawl fast."""
+
+    domain_id: str = Field(min_length=1)
+    root_url: str = Field(min_length=1)
+    display_name: str | None = None
+    max_pages: int | None = Field(default=None, ge=1)
+    max_depth: int | None = Field(default=None, ge=0)
+    # Cached fallback: ingest this saved crawl JSON instead of crawling live (the demo insurance).
+    corpus_path: str | None = None
+
+
+class BusinessOut(BaseModel):
+    """A registered business and its ingest state — the POST/status response and selector entry."""
+
+    domain_id: str
+    display_name: str
+    root_url: str
+    status: str
+    chunk_count: int
+    error: str | None = None
+
+
+class DomainsResponse(BaseModel):
+    domains: list[BusinessOut]
