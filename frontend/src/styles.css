@@ -98,3 +98,21 @@ button.secondary {
 
 .meta { font-size: 0.78rem; color: var(--muted); padding-top: 8px; border-top: 1px solid var(--border); }
 .meta code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; }
+
+.add-business {
+  border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+  padding: 8px 12px; margin-bottom: 12px;
+}
+.add-business summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+.add-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.add-fields input {
+  flex: 1 1 160px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 0.9rem;
+}
+.add-fields button {
+  padding: 8px 16px; border: 0; border-radius: 6px; background: var(--accent); color: #fff;
+  cursor: pointer; font-size: 0.9rem;
+}
+.add-fields button:disabled { opacity: 0.55; cursor: not-allowed; }
+.add-status { font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; }
+.add-error { font-size: 0.85rem; color: var(--error); margin: 8px 0 0; }

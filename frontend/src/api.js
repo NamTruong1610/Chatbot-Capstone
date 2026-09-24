@@ -32,3 +32,23 @@ export async function sendMessage({ message, domainId, role, sessionId }) {
     }),
   )
 }
+
+export async function addBusiness({ domainId, rootUrl, displayName, adminToken }) {
+  // The admin token guards this write endpoint (FR-API-02); it rides in X-API-Key. Returns the
+  // business in `pending` state — the crawl runs in the background, so poll getBusinessStatus.
+  return jsonOrThrow(
+    await fetch(`${API_BASE}/api/crawl/site`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': adminToken },
+      body: JSON.stringify({
+        domain_id: domainId,
+        root_url: rootUrl,
+        display_name: displayName || undefined,
+      }),
+    }),
+  )
+}
+
+export async function getBusinessStatus(domainId) {
+  return jsonOrThrow(await fetch(`${API_BASE}/api/crawl/site/${encodeURIComponent(domainId)}`))
+}

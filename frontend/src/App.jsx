@@ -3,6 +3,7 @@ import { getDomains, sendMessage } from './api.js'
 import BusinessSelector from './components/BusinessSelector.jsx'
 import RoleToggle from './components/RoleToggle.jsx'
 import ChatWindow from './components/ChatWindow.jsx'
+import AddBusinessForm from './components/AddBusinessForm.jsx'
 
 export default function App() {
   const [domains, setDomains] = useState([])
@@ -11,6 +12,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState('')
   const [messages, setMessages] = useState([])
   const [error, setError] = useState('')
+  const [adminToken, setAdminToken] = useState('') // kept in state so it isn't retyped per add
 
   const refreshDomains = useCallback(async () => {
     try {
@@ -80,6 +82,13 @@ export default function App() {
         onSend={handleSend}
         canChat={canChat}
         disabledReason={disabledReason}
+      />
+
+      <AddBusinessForm
+        adminToken={adminToken}
+        onAdminToken={setAdminToken}
+        onDomainsChanged={refreshDomains}
+        onReady={setDomainId}
       />
 
       <footer className="meta">
