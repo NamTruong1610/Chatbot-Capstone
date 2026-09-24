@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from chatbot.api.conversation import ConversationService
 from chatbot.api.ingestion_service import CrawlIngestWorker, IngestionService
@@ -53,6 +54,10 @@ from chatbot.store.fingerprint import list_fingerprints
 DEFAULT_CONFIG_ID = "C0-baseline"
 DEFAULT_DOMAIN_ID = "wyatt-edu"
 _ADMIN_TOKEN_ENV = "CHATBOT_ADMIN_TOKEN"
+_CORS_ORIGINS_ENV = "CHATBOT_CORS_ORIGINS"
+# The Vite dev server. Without CORS the browser silently blocks every :5173 → :8000 request;
+# override via CHATBOT_CORS_ORIGINS (comma-separated) for other hosts.
+_DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 _DB_DIR = Path(__file__).resolve().parents[3] / "db"
 _SCHEMA_PATH = _DB_DIR / "conversation_schema.sql"
 _BUSINESS_SCHEMA_PATH = _DB_DIR / "business_schema.sql"
@@ -123,6 +128,20 @@ def create_app(
         yield
 
     app = FastAPI(title="Chatbot (RAG) — RQ demo", lifespan=lifespan)
+
+    # CORS for the React dev frontend (Phase 10). The admin token rides in the X-API-Key header,
+    # not a cookie, so credentials are not needed.
+    cors_origins = [
+        origin.strip()
+        for origin in os.environ.get(_CORS_ORIGINS_ENV, _DEFAULT_CORS_ORIGINS).split(",")
+        if origin.strip()
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-API-Key"],
+    )
 
     def _service() -> ConversationService:
         service = state["service"]
