@@ -1,42 +1,93 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getDomains, sendMessage } from './api.js'
+import { getConversationHistory, getConversations, getDomains, sendMessage } from './api.js'
 import BusinessSelector from './components/BusinessSelector.jsx'
 import RoleToggle from './components/RoleToggle.jsx'
 import ChatWindow from './components/ChatWindow.jsx'
 import AddBusinessForm from './components/AddBusinessForm.jsx'
 import AddPrivateNote from './components/AddPrivateNote.jsx'
+import ConversationList from './components/ConversationList.jsx'
 
 export default function App() {
   const [domains, setDomains] = useState([])
   const [domainId, setDomainId] = useState('')
   const [role, setRole] = useState('customer')
-  const [sessionId, setSessionId] = useState('')
+  // Minted once here; thereafter a NEW session is minted only on an explicit user switch
+  // (changeDomain/changeRole/newConversation). Resuming ADOPTS a session and must not reset —
+  // so the reset lives in those handlers, never in an effect that fires when domain/role change.
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID())
   const [messages, setMessages] = useState([])
+  const [conversations, setConversations] = useState([])
   const [error, setError] = useState('')
-  const [adminToken, setAdminToken] = useState('') // kept in state so it isn't retyped per add
+  const [adminToken, setAdminToken] = useState('')
 
   const refreshDomains = useCallback(async () => {
     try {
       const data = await getDomains()
       setDomains(data.domains)
-      // Default to the first ready business if nothing is selected yet.
       setDomainId((cur) => cur || data.domains.find((d) => d.status === 'ready')?.domain_id || '')
     } catch (e) {
       setError(`Could not load businesses — is the backend running on :8000? (${e.message})`)
     }
   }, [])
 
+  // The conversation browser reacts to the current scope. This only re-fetches the LIST — it never
+  // touches sessionId/messages, so it is safe to fire when a resume changes domain/role.
+  const refreshConversations = useCallback(async () => {
+    if (!domainId) return
+    try {
+      const data = await getConversations({ domainId, role })
+      setConversations(data.conversations)
+    } catch {
+      // a missing list is not fatal to chatting; leave the sidebar as-is
+    }
+  }, [domainId, role])
+
   useEffect(() => {
     refreshDomains()
   }, [refreshDomains])
 
-  // Mint a fresh conversation whenever the domain OR role changes. A conversation's (domain, role)
-  // is fixed at creation, so reusing a session_id across a switch would hit the backend's
-  // fail-closed scope guard (403). New session = clean, correct conversation.
   useEffect(() => {
+    refreshConversations()
+  }, [refreshConversations])
+
+  // Explicit resets — a user-driven scope switch starts a fresh conversation (the (domain, role)
+  // scope is fixed per conversation, so a reused session across a switch would 403).
+  const changeDomain = (d) => {
+    setDomainId(d)
     setSessionId(crypto.randomUUID())
     setMessages([])
-  }, [domainId, role])
+  }
+  const changeRole = (r) => {
+    setRole(r)
+    setSessionId(crypto.randomUUID())
+    setMessages([])
+  }
+  const newConversation = () => {
+    setSessionId(crypto.randomUUID())
+    setMessages([])
+  }
+
+  // Resume ADOPTS the conversation's scope + session + messages, all at once and WITHOUT going
+  // through changeDomain/changeRole — so no reset fires and the next message continues it (no 403).
+  const resumeConversation = async (summary) => {
+    setError('')
+    try {
+      const history = await getConversationHistory(summary.session_id)
+      setDomainId(summary.domain_id)
+      setRole(summary.role)
+      setSessionId(summary.session_id)
+      setMessages(
+        history.messages.map((m) => ({
+          sender: m.sender,
+          content: m.content,
+          sources: m.sources || [],
+          grounded: m.grounded,
+        })),
+      )
+    } catch (e) {
+      setError(`Could not resume conversation: ${e.message}`)
+    }
+  }
 
   const handleSend = async (text) => {
     setError('')
@@ -47,14 +98,10 @@ export default function App() {
         ...prev,
         { sender: 'assistant', content: res.answer, sources: res.sources, grounded: res.grounded },
       ])
+      refreshConversations() // the active conversation now appears/updates in the sidebar
     } catch (e) {
       setMessages((prev) => [...prev, { sender: 'assistant', content: `⚠ ${e.message}`, error: true }])
     }
-  }
-
-  const newConversation = () => {
-    setSessionId(crypto.randomUUID())
-    setMessages([])
   }
 
   const selected = domains.find((d) => d.domain_id === domainId)
@@ -65,41 +112,51 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
-        <h1>SME Chatbot</h1>
-        <div className="controls">
-          <BusinessSelector domains={domains} value={domainId} onChange={setDomainId} />
-          <RoleToggle value={role} onChange={setRole} />
-          <button type="button" className="secondary" onClick={newConversation}>
-            New conversation
-          </button>
-        </div>
-      </header>
+      <aside className="sidebar">
+        <ConversationList
+          conversations={conversations}
+          activeSessionId={sessionId}
+          onResume={resumeConversation}
+        />
+      </aside>
 
-      {error && <div className="error-banner">{error}</div>}
+      <main className="main">
+        <header>
+          <h1>SME Chatbot</h1>
+          <div className="controls">
+            <BusinessSelector domains={domains} value={domainId} onChange={changeDomain} />
+            <RoleToggle value={role} onChange={changeRole} />
+            <button type="button" className="secondary" onClick={newConversation}>
+              New conversation
+            </button>
+          </div>
+        </header>
 
-      <ChatWindow
-        messages={messages}
-        onSend={handleSend}
-        canChat={canChat}
-        disabledReason={disabledReason}
-      />
+        {error && <div className="error-banner">{error}</div>}
 
-      {role === 'staff' && (
-        <AddPrivateNote domainId={domainId} adminToken={adminToken} onAdminToken={setAdminToken} />
-      )}
+        <ChatWindow
+          messages={messages}
+          onSend={handleSend}
+          canChat={canChat}
+          disabledReason={disabledReason}
+        />
 
-      <AddBusinessForm
-        adminToken={adminToken}
-        onAdminToken={setAdminToken}
-        onDomainsChanged={refreshDomains}
-        onReady={setDomainId}
-      />
+        {role === 'staff' && (
+          <AddPrivateNote domainId={domainId} adminToken={adminToken} onAdminToken={setAdminToken} />
+        )}
 
-      <footer className="meta">
-        domain <code>{domainId || '—'}</code> · role <code>{role}</code> · session{' '}
-        <code>{sessionId ? sessionId.slice(0, 8) : '—'}</code>
-      </footer>
+        <AddBusinessForm
+          adminToken={adminToken}
+          onAdminToken={setAdminToken}
+          onDomainsChanged={refreshDomains}
+          onReady={changeDomain}
+        />
+
+        <footer className="meta">
+          domain <code>{domainId || '—'}</code> · role <code>{role}</code> · session{' '}
+          <code>{sessionId ? sessionId.slice(0, 8) : '—'}</code>
+        </footer>
+      </main>
     </div>
   )
 }

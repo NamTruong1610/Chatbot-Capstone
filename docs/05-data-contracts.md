@@ -304,6 +304,24 @@ Returns the stored message log for a conversation. No API key (chat is unauthent
 }
 ```
 
+### `GET /api/conversations?domain_id=&role=` — browse past conversations (FR-API-07)
+
+Lists conversations for one `(domain_id, role)` scope, most-recently-active first, empty
+conversations excluded. A read (no key). `title` is the first user message truncated (no LLM),
+`preview` the latest message truncated.
+
+```json
+{"conversations": [
+  {"session_id": "uuid", "domain_id": "wyatt-edu", "role": "customer",
+   "title": "How much is the Diploma of Business?", "preview": "The fee is $11,500.",
+   "updated_at": "2026-09-25T…", "message_count": 4}
+]}
+```
+
+To **resume**: the UI sets the business selector to `domain_id` and the role toggle to `role`,
+loads the messages via `GET /api/chat/conversation/{session_id}`, and adopts `session_id` — so the
+next message continues the conversation (its fixed `(domain_id, role)` scope matches, no 403).
+
 ---
 
 ## 7. Conversation store (Postgres)

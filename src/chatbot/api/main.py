@@ -31,6 +31,8 @@ from chatbot.api.schemas import (
     ChatRequest,
     ChatResponse,
     ConversationHistoryResponse,
+    ConversationsResponse,
+    ConversationSummaryOut,
     CrawlSiteRequest,
     DomainsResponse,
     MessageOut,
@@ -249,6 +251,22 @@ def create_app(
                 )
                 for m in messages
             ],
+        )
+
+    @app.get("/api/conversations", response_model=ConversationsResponse)
+    def list_conversations(domain_id: str, role: str = "customer") -> ConversationsResponse:
+        # Read-only: the browser lists past conversations for the current (domain, role) scope,
+        # most recent first. Clicking one resumes it (the UI adopts its session_id).
+        summaries = _service().list_conversations(domain_id, role)
+        return ConversationsResponse(
+            conversations=[
+                ConversationSummaryOut(
+                    session_id=s.session_id, domain_id=s.domain_id, role=s.role,
+                    title=s.title, preview=s.preview, updated_at=s.updated_at,
+                    message_count=s.message_count,
+                )
+                for s in summaries
+            ]
         )
 
     @app.post("/api/crawl/site", response_model=BusinessOut)

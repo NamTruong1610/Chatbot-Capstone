@@ -19,11 +19,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 USER = "user"
 ASSISTANT = "assistant"
 _DSN_ENV = "CHATBOT_POSTGRES_DSN"
+_TITLE_LEN = 80
+_PREVIEW_LEN = 120
 
 
 class ConversationError(RuntimeError):
@@ -72,6 +75,41 @@ class Exchange:
     assistant: str
 
 
+@dataclass(frozen=True)
+class ConversationSummary:
+    """A row in the conversation browser (Phase 12). Carries its own ``(domain_id, role)`` so the
+    UI can resume it into the right scope. ``title`` is the first user message (no LLM); ``preview``
+    is the latest message — both truncated."""
+
+    session_id: str
+    domain_id: str
+    role: str
+    title: str
+    preview: str
+    updated_at: str
+    message_count: int
+
+
+def _truncate(text: str, limit: int) -> str:
+    text = text.strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+
+
+def _title_of(messages: list[Message]) -> str:
+    """First user message, truncated — the conversation's title. ``(untitled)`` if it has none."""
+    for msg in sorted(messages, key=lambda m: m.turn_index):
+        if msg.sender == USER:
+            return _truncate(msg.content, _TITLE_LEN)
+    return "(untitled)"
+
+
+def _preview_of(messages: list[Message]) -> str:
+    """The latest message, truncated — a glimpse of where the conversation left off."""
+    if not messages:
+        return ""
+    return _truncate(max(messages, key=lambda m: m.turn_index).content, _PREVIEW_LEN)
+
+
 @runtime_checkable
 class ConversationStore(Protocol):
     """Read/write a conversation log. Implementations: in-memory (tests/CI) and Postgres."""
@@ -101,6 +139,11 @@ class ConversationStore(Protocol):
         """Every message in order — backs the fetch-a-conversation endpoint."""
         ...
 
+    def list_conversations(self, domain_id: str, role: str) -> list[ConversationSummary]:
+        """Past conversations for one (domain_id, role), most-recently-active first, empties
+        excluded — backs the conversation browser (Phase 12)."""
+        ...
+
 
 def _pair_exchanges(messages: list[Message]) -> list[Exchange]:
     """Pair each user message with the assistant reply that follows it, in order.
@@ -125,6 +168,16 @@ class InMemoryConversationStore:
     def __init__(self) -> None:
         self._conversations: dict[str, Conversation] = {}
         self._messages: dict[str, list[Message]] = {}
+        # Recency for the browser: a monotonic counter gives a deterministic order (no wall-clock
+        # ties), while updated_at is an ISO string for display.
+        self._seq = 0
+        self._touch: dict[str, int] = {}
+        self._updated_at: dict[str, str] = {}
+
+    def _mark_touched(self, conversation_id: str) -> None:
+        self._seq += 1
+        self._touch[conversation_id] = self._seq
+        self._updated_at[conversation_id] = datetime.now(UTC).isoformat()
 
     def open_conversation(self, conversation_id: str, domain_id: str, role: str) -> Conversation:
         existing = self._conversations.get(conversation_id)
@@ -132,6 +185,7 @@ class InMemoryConversationStore:
             convo = Conversation(conversation_id, domain_id, role)
             self._conversations[conversation_id] = convo
             self._messages[conversation_id] = []
+            self._mark_touched(conversation_id)
             return convo
         if existing.domain_id != domain_id or existing.role != role:
             raise ConversationScopeError(
@@ -164,6 +218,7 @@ class InMemoryConversationStore:
             search_query=search_query,
         )
         log.append(msg)
+        self._mark_touched(conversation_id)
         return msg
 
     def recent_exchanges(self, conversation_id: str, *, limit_turns: int) -> list[Exchange]:
@@ -172,6 +227,27 @@ class InMemoryConversationStore:
 
     def list_messages(self, conversation_id: str) -> list[Message]:
         return list(self._messages.get(conversation_id, []))
+
+    def list_conversations(self, domain_id: str, role: str) -> list[ConversationSummary]:
+        ranked: list[tuple[int, ConversationSummary]] = []
+        for cid, convo in self._conversations.items():
+            if convo.domain_id != domain_id or convo.role != role:
+                continue
+            messages = self._messages.get(cid, [])
+            if not messages:
+                continue  # exclude empty conversations from the browser
+            ranked.append(
+                (
+                    self._touch.get(cid, 0),
+                    ConversationSummary(
+                        session_id=cid, domain_id=convo.domain_id, role=convo.role,
+                        title=_title_of(messages), preview=_preview_of(messages),
+                        updated_at=self._updated_at.get(cid, ""), message_count=len(messages),
+                    ),
+                )
+            )
+        ranked.sort(key=lambda item: item[0], reverse=True)  # most recently active first
+        return [summary for _, summary in ranked]
 
 
 class PostgresConversationStore:
@@ -271,6 +347,36 @@ class PostgresConversationStore:
 
     def list_messages(self, conversation_id: str) -> list[Message]:
         return self._fetch_messages(conversation_id)
+
+    def list_conversations(self, domain_id: str, role: str) -> list[ConversationSummary]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT c.conversation_id, c.domain_id, c.role, "
+                "  (SELECT content FROM messages m WHERE m.conversation_id = c.conversation_id "
+                "     AND m.sender = %s ORDER BY m.turn_index ASC LIMIT 1) AS title, "
+                "  (SELECT content FROM messages m WHERE m.conversation_id = c.conversation_id "
+                "     ORDER BY m.turn_index DESC LIMIT 1) AS preview, "
+                "  (SELECT count(*) FROM messages m WHERE m.conversation_id = c.conversation_id) "
+                "     AS message_count, "
+                "  c.updated_at "
+                "FROM conversations c WHERE c.domain_id = %s AND c.role = %s "
+                "ORDER BY c.updated_at DESC NULLS LAST",
+                (USER, domain_id, role),
+            ).fetchall()
+        summaries: list[ConversationSummary] = []
+        for cid, dom, rl, first_user, last_msg, count, updated in rows:
+            if not count:
+                continue  # exclude empty conversations
+            summaries.append(
+                ConversationSummary(
+                    session_id=cid, domain_id=dom, role=rl,
+                    title=_truncate(first_user, _TITLE_LEN) if first_user else "(untitled)",
+                    preview=_truncate(last_msg, _PREVIEW_LEN) if last_msg else "",
+                    updated_at=updated.isoformat() if updated is not None else "",
+                    message_count=int(count),
+                )
+            )
+        return summaries
 
 
 def build_conversation_store(dsn: str | None = None) -> ConversationStore:
