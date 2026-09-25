@@ -144,3 +144,73 @@ def test_append_to_unopened_conversation_is_an_error() -> None:
     store = InMemoryConversationStore()
     with pytest.raises(ConversationError):
         store.append_message("ghost", sender=USER, content="hi")
+
+
+# --- list_conversations (Phase 12) ---
+
+
+def _dom() -> str:
+    # A unique domain per test isolates the scoped list on a shared Postgres.
+    return f"d-{uuid.uuid4().hex[:8]}"
+
+
+def _converse(store: Any, cid: str, domain: str, role: str, user_text: str) -> None:
+    store.open_conversation(cid, domain, role)
+    store.append_message(cid, sender=USER, content=user_text)
+    store.append_message(cid, sender=ASSISTANT, content=f"reply to: {user_text}")
+
+
+def test_list_conversations_is_scoped_and_most_recent_first(store: Any) -> None:
+    domain = _dom()
+    first, second = _cid(), _cid()
+    _converse(store, first, domain, "customer", "first question")
+    _converse(store, second, domain, "customer", "second question")  # more recently active
+    _converse(store, _cid(), domain, "staff", "staff question")  # different role — excluded
+    _converse(store, _cid(), _dom(), "customer", "other domain")  # different domain — excluded
+
+    listed = store.list_conversations(domain, "customer")
+    assert [c.session_id for c in listed] == [second, first]  # most recent first, scoped
+    assert all(c.domain_id == domain and c.role == "customer" for c in listed)
+
+
+def test_list_conversation_summary_fields(store: Any) -> None:
+    domain = _dom()
+    cid = _cid()
+    store.open_conversation(cid, domain, "customer")
+    store.append_message(cid, sender=USER, content="How much is the Diploma of Business?")
+    store.append_message(cid, sender=ASSISTANT, content="The fee is $11,500.")
+
+    (summary,) = store.list_conversations(domain, "customer")
+    assert summary.title == "How much is the Diploma of Business?"  # first user message
+    assert summary.preview == "The fee is $11,500."  # last message
+    assert summary.message_count == 2
+    assert summary.updated_at  # a timestamp is present
+
+
+def test_list_conversation_title_is_truncated(store: Any) -> None:
+    domain = _dom()
+    cid = _cid()
+    long_q = "why " * 60  # far longer than the 80-char title limit
+    store.open_conversation(cid, domain, "customer")
+    store.append_message(cid, sender=USER, content=long_q)
+    store.append_message(cid, sender=ASSISTANT, content="because")
+
+    (summary,) = store.list_conversations(domain, "customer")
+    assert summary.title.endswith("…")
+    assert len(summary.title) <= 81  # 80 chars + the ellipsis
+
+
+def test_empty_conversation_is_excluded(store: Any) -> None:
+    domain = _dom()
+    store.open_conversation(_cid(), domain, "customer")  # opened, no messages
+    assert store.list_conversations(domain, "customer") == []
+
+
+def test_conversation_with_no_user_message_is_untitled(store: Any) -> None:
+    domain = _dom()
+    cid = _cid()
+    store.open_conversation(cid, domain, "customer")
+    store.append_message(cid, sender=ASSISTANT, content="a system note with no user turn")
+
+    (summary,) = store.list_conversations(domain, "customer")
+    assert summary.title == "(untitled)"

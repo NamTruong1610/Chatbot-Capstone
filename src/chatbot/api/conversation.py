@@ -23,6 +23,7 @@ from chatbot.store.conversation import (
     ASSISTANT,
     USER,
     ConversationStore,
+    ConversationSummary,
     Message,
 )
 
@@ -83,3 +84,10 @@ class ConversationService:
         if self._store is None:
             return []
         return self._store.list_messages(session_id)
+
+    def list_conversations(self, domain_id: str, role: str) -> list[ConversationSummary]:
+        """Past conversations for one (domain_id, role) — store-only, so any service instance
+        serves it off the shared store. Empty when no store is configured (stateless)."""
+        if self._store is None:
+            return []
+        return self._store.list_conversations(domain_id, role or _DEFAULT_ROLE)

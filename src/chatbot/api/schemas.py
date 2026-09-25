@@ -49,6 +49,22 @@ class ConversationHistoryResponse(BaseModel):
     messages: list[MessageOut]
 
 
+class ConversationSummaryOut(BaseModel):
+    """A row in the conversation browser (FR-API-07). Carries its scope so the UI can resume it."""
+
+    session_id: str
+    domain_id: str
+    role: str
+    title: str
+    preview: str
+    updated_at: str
+    message_count: int
+
+
+class ConversationsResponse(BaseModel):
+    conversations: list[ConversationSummaryOut]
+
+
 class CrawlSiteRequest(BaseModel):
     """Body for POST /api/crawl/site (FR-API-05). Optional bounds keep a demo crawl fast."""
 
