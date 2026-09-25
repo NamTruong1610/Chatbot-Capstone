@@ -26,9 +26,17 @@ from typing import Protocol, runtime_checkable
 
 from chatbot.config.schema import EmbeddingConfig, IngestionConfig, ResolvedConfig, StoreConfig
 from chatbot.ingestion.crawler.base import CrawledPage, Crawler, build_crawler
-from chatbot.ingestion.pipeline import IngestResult, ingest, load_corpus
+from chatbot.ingestion.pipeline import (
+    IngestResult,
+    PrivateIngestResult,
+    ingest,
+    ingest_private_note,
+    load_corpus,
+)
+from chatbot.pipeline import IndexNotReadyError
 from chatbot.store.business import CRAWLING, Business, BusinessRegistry
 from chatbot.store.embedder import TextEmbedder, build_embedder
+from chatbot.store.fingerprint import DEFAULT_INDEX_DIR, read_fingerprint
 from chatbot.store.vector import VectorStore
 
 # Raw crawl output lands here before any processing (FR-CRAWL-09), one dir per domain. This same
@@ -211,3 +219,37 @@ class CrawlIngestWorker:
             crawl_manifest=manifest,
         )
         return IngestOutcome(chunk_count=result.chunk_count, crawl_manifest=manifest)
+
+
+class PrivateNoteService:
+    """Append a staff-authored private note to an already-ingested domain (Phase 11, FR-API-06).
+
+    Synchronous (no crawl): builds the embedder + store and calls ``ingest_private_note`` (append,
+    never a rebuild). Refuses a domain with no index — a note must attach to a ready business, not
+    create an orphan partition — by raising ``IndexNotReadyError`` (the route maps it to 404).
+    Collaborators are injectable so tests drive it without a model or Qdrant.
+    """
+
+    def __init__(
+        self,
+        cfg: ResolvedConfig,
+        *,
+        embedder_factory: Callable[[EmbeddingConfig], TextEmbedder] = build_embedder,
+        store_factory: Callable[[StoreConfig, int], VectorStore] = _default_store,
+        index_dir: Path = DEFAULT_INDEX_DIR,
+    ) -> None:
+        self._cfg = cfg
+        self._embedder_factory = embedder_factory
+        self._store_factory = store_factory
+        self._index_dir = index_dir
+
+    def add(self, domain_id: str, title: str, text: str) -> PrivateIngestResult:
+        if read_fingerprint(domain_id, self._cfg.index_key(), base_dir=self._index_dir) is None:
+            raise IndexNotReadyError(
+                f"domain {domain_id!r} is not ingested; add the business before adding notes"
+            )
+        embedder = self._embedder_factory(self._cfg.embedding)
+        store = self._store_factory(self._cfg.store, embedder.dimensions)
+        return ingest_private_note(
+            self._cfg, domain_id=domain_id, title=title, text=text, store=store, embedder=embedder
+        )

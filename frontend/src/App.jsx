@@ -4,6 +4,7 @@ import BusinessSelector from './components/BusinessSelector.jsx'
 import RoleToggle from './components/RoleToggle.jsx'
 import ChatWindow from './components/ChatWindow.jsx'
 import AddBusinessForm from './components/AddBusinessForm.jsx'
+import AddPrivateNote from './components/AddPrivateNote.jsx'
 
 export default function App() {
   const [domains, setDomains] = useState([])
@@ -83,6 +84,10 @@ export default function App() {
         canChat={canChat}
         disabledReason={disabledReason}
       />
+
+      {role === 'staff' && (
+        <AddPrivateNote domainId={domainId} adminToken={adminToken} onAdminToken={setAdminToken} />
+      )}
 
       <AddBusinessForm
         adminToken={adminToken}

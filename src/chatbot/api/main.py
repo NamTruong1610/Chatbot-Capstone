@@ -24,7 +24,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from chatbot.api.conversation import ConversationService
-from chatbot.api.ingestion_service import CrawlIngestWorker, IngestionService
+from chatbot.api.ingestion_service import CrawlIngestWorker, IngestionService, PrivateNoteService
 from chatbot.api.pipeline_registry import PipelineRegistry
 from chatbot.api.schemas import (
     BusinessOut,
@@ -34,6 +34,8 @@ from chatbot.api.schemas import (
     CrawlSiteRequest,
     DomainsResponse,
     MessageOut,
+    PrivateNoteRequest,
+    PrivateNoteResponse,
 )
 from chatbot.config.loader import load_config
 from chatbot.pipeline import ChatPipeline, IndexNotReadyError, build_chat_pipeline
@@ -71,6 +73,7 @@ def create_app(
     store: ConversationStore | None = None,
     ingestion_service: IngestionService | None = None,
     pipeline_registry: PipelineRegistry | None = None,
+    private_note_service: PrivateNoteService | None = None,
     admin_token: str | None = None,
 ) -> FastAPI:
     """Build the app. ``pipeline``/``store``/``ingestion_service`` are injectable so tests drive the
@@ -87,6 +90,7 @@ def create_app(
     )
     state: dict[str, ConversationService | None] = {"service": None}
     ingestion_state: dict[str, IngestionService | None] = {"service": ingestion_service}
+    private_note_state: dict[str, PrivateNoteService | None] = {"service": private_note_service}
     # Multi-domain routing (Phase 9): the default domain is served by state["service"] exactly as
     # before; other domains are served through a PipelineRegistry, each pipeline built once and
     # cached, wrapped in a per-domain ConversationService sharing the one store.
@@ -125,6 +129,8 @@ def create_app(
                     registry.ensure_schema(_BUSINESS_SCHEMA_PATH.read_text(encoding="utf-8"))
                 reconcile_fingerprints(registry, list_fingerprints())
                 ingestion_state["service"] = IngestionService(registry, CrawlIngestWorker(cfg))
+            if private_note_state["service"] is None:
+                private_note_state["service"] = PrivateNoteService(cfg)
         yield
 
     app = FastAPI(title="Chatbot (RAG) — RQ demo", lifespan=lifespan)
@@ -151,6 +157,12 @@ def create_app(
 
     def _ingestion() -> IngestionService:
         service = ingestion_state["service"]
+        if service is None:  # pragma: no cover - lifespan builds it before requests are served
+            raise HTTPException(status_code=503, detail="ingestion not available")
+        return service
+
+    def _private_notes() -> PrivateNoteService:
+        service = private_note_state["service"]
         if service is None:  # pragma: no cover - lifespan builds it before requests are served
             raise HTTPException(status_code=503, detail="ingestion not available")
         return service
@@ -271,6 +283,22 @@ def create_app(
         # Read-only: the business selector needs this without a key.
         return DomainsResponse(
             domains=[_business_out(b) for b in _ingestion().list_businesses()]
+        )
+
+    @app.post("/api/ingest/private", response_model=PrivateNoteResponse)
+    def ingest_private(
+        request: PrivateNoteRequest,
+        x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    ) -> PrivateNoteResponse:
+        # Same admin-token guard as crawl (FR-API-02) — an ingestion write, not role-only. The
+        # staff role gates SHOWING the form in the UI; the token gates the actual write.
+        _require_admin(x_api_key)
+        try:
+            result = _private_notes().add(request.domain_id, request.title, request.text)
+        except IndexNotReadyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return PrivateNoteResponse(
+            domain_id=result.domain_id, title=result.title, chunks_added=result.chunks_added
         )
 
     return app
