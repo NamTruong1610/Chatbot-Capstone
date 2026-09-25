@@ -53,6 +53,17 @@ export async function getBusinessStatus(domainId) {
   return jsonOrThrow(await fetch(`${API_BASE}/api/crawl/site/${encodeURIComponent(domainId)}`))
 }
 
+export async function getConversations({ domainId, role }) {
+  const q = new URLSearchParams({ domain_id: domainId, role })
+  return jsonOrThrow(await fetch(`${API_BASE}/api/conversations?${q}`))
+}
+
+export async function getConversationHistory(sessionId) {
+  return jsonOrThrow(
+    await fetch(`${API_BASE}/api/chat/conversation/${encodeURIComponent(sessionId)}`),
+  )
+}
+
 export async function ingestPrivateNote({ domainId, title, text, adminToken }) {
   // Staff-only private content. Admin-token-gated (X-API-Key) like the other ingestion writes;
   // the note is ingested as access_level=private, retrievable by staff, never by customers.
