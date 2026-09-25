@@ -74,3 +74,18 @@ class BusinessOut(BaseModel):
 
 class DomainsResponse(BaseModel):
     domains: list[BusinessOut]
+
+
+class PrivateNoteRequest(BaseModel):
+    """Body for POST /api/ingest/private (FR-API-06): staff-authored private text, no crawl."""
+
+    domain_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class PrivateNoteResponse(BaseModel):
+    domain_id: str
+    title: str
+    chunks_added: int
+    access_level: str = "private"

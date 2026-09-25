@@ -16,6 +16,7 @@ no effect here — ``typed`` produces table/qa/prose chunks only. This first C0 
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,22 +78,26 @@ def _page_from_dict(raw: dict[str, Any]) -> CrawledPage:
     )
 
 
-def ingest(
+def build_vector_records(
     cfg: ResolvedConfig,
     *,
     domain_id: str,
-    root_url: str,
+    document_id: str,
     pages: list[CrawledPage],
-    store: VectorStore,
     embedder: TextEmbedder,
-    crawl_manifest: str = "",
-    index_dir: Path = DEFAULT_INDEX_DIR,
-) -> IngestResult:
-    """Chunk → label → embed → (re)store one corpus, returning its index fingerprint."""
+) -> tuple[list[VectorRecord], dict[str, int]]:
+    """Chunk → label → embed ``pages`` into VectorRecords, returning them and a by-type count.
+
+    The single labeling path, shared by ``ingest`` (full rebuild) and ``ingest_private_note``
+    (append). Access levels come from ``assign_access`` — a page's explicit ``access_level`` is the
+    tier-1 override (FR-ACL-02), keyed by ``source_url`` — so a private-labelled page is labelled
+    private identically whichever caller built it. That shared code is what makes the endpoint's
+    isolation match the file path's, rather than being a second implementation that could drift.
+    """
     index_key = cfg.index_key()
     ctx = IngestContext(
         domain_id=domain_id,
-        document_id=f"site:{root_url}",
+        document_id=document_id,
         config_id=cfg.id,
         chunking_hash=cfg.chunking_hash(),
     )
@@ -116,6 +121,31 @@ def ingest(
         point_id = str(uuid.uuid5(_POINT_NAMESPACE, chunk.chunk_id))
         records.append(VectorRecord(point_id=point_id, vector=vector, payload=payload))
         by_type[chunk.chunk_type] = by_type.get(chunk.chunk_type, 0) + 1
+    return records, by_type
+
+
+def ingest(
+    cfg: ResolvedConfig,
+    *,
+    domain_id: str,
+    root_url: str,
+    pages: list[CrawledPage],
+    store: VectorStore,
+    embedder: TextEmbedder,
+    crawl_manifest: str = "",
+    index_dir: Path = DEFAULT_INDEX_DIR,
+) -> IngestResult:
+    """Chunk → label → embed → (re)store one corpus, returning its index fingerprint.
+
+    A full **rebuild**: the (domain, index_key) partition is dropped and re-written, so a re-ingest
+    is idempotent (FR-CRAWL-12). Public and private corpora must therefore be ingested together in
+    one call — a second ingest would wipe the first. To *add* to an existing index without dropping
+    it, use ``ingest_private_note`` (append).
+    """
+    index_key = cfg.index_key()
+    records, by_type = build_vector_records(
+        cfg, domain_id=domain_id, document_id=f"site:{root_url}", pages=pages, embedder=embedder
+    )
 
     store.ensure_ready()
     store.delete_partition(domain_id=domain_id, index_key=index_key)  # idempotent rebuild
@@ -129,8 +159,48 @@ def ingest(
         embedding_model=cfg.embedding.model,
         embedding_dimensions=embedder.dimensions,
         crawl_manifest=crawl_manifest,
-        chunk_count=len(chunks),
+        chunk_count=len(records),
         ingested_at=IndexFingerprint.now_iso(),
     )
     write_fingerprint(fingerprint, base_dir=index_dir)
-    return IngestResult(fingerprint=fingerprint, chunk_count=len(chunks), by_type=by_type)
+    return IngestResult(fingerprint=fingerprint, chunk_count=len(records), by_type=by_type)
+
+
+@dataclass(frozen=True)
+class PrivateIngestResult:
+    domain_id: str
+    title: str
+    chunks_added: int
+
+
+def _slug(title: str) -> str:
+    """A readable, stable url slug from a note title (same title → same doc → idempotent upsert)."""
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return slug or "note"
+
+
+def ingest_private_note(
+    cfg: ResolvedConfig,
+    *,
+    domain_id: str,
+    title: str,
+    text: str,
+    store: VectorStore,
+    embedder: TextEmbedder,
+) -> PrivateIngestResult:
+    """Append a staff-authored note to a domain as ``private`` content, WITHOUT rebuilding.
+
+    Deliberately does **not** call ``delete_partition``: this runs after the business's public
+    corpus is already indexed, so a rebuild would wipe it (catastrophic). It upserts only the note's
+    chunks; deterministic point ids keep re-adding the same note idempotent. The note is a synthetic
+    ``internal://`` page carrying ``access_level="private"``, so it is labelled through the exact
+    same ``build_vector_records`` path the file-based private corpus uses (FR-API-06).
+    """
+    url = f"internal://{domain_id}/{_slug(title)}"
+    page = CrawledPage(url=url, title=title, text=text, depth=0, access_level="private")
+    records, _ = build_vector_records(
+        cfg, domain_id=domain_id, document_id=url, pages=[page], embedder=embedder
+    )
+    store.ensure_ready()
+    store.upsert(records)  # APPEND — never delete_partition (that would wipe public content)
+    return PrivateIngestResult(domain_id=domain_id, title=title, chunks_added=len(records))
