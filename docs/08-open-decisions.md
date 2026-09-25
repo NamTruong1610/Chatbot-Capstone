@@ -539,3 +539,38 @@ how much auth, and how is the demo made reliable?
 
 **Deferred:** document upload (web-scrape only this phase); the selector UI; summarisation;
 per-business auth.
+
+---
+
+## OD-18 — Dynamic private-data ingestion: Level 1 vs Level 2 (Phase 11)
+
+**Status:** ☑ Resolved 2026-09-25 (Level 1 built) · **Decider:** you (approved in the phase plan) ·
+**Blocked:** dynamic per-business private content (strengthens RQ2)
+
+**Decision.** Build **Level 1**: staff add private text through the running system
+(`POST /api/ingest/private`, FR-API-06). Private data is now dynamically addable per business, not
+just the static file corpus — generalising RQ2 access isolation across businesses.
+
+**What Level 1 is (and its deliberate boundaries):**
+- **Append, never rebuild.** The endpoint appends via `store.upsert` and must never call
+  `delete_partition` — a rebuild would wipe the business's public content. This is the load-bearing
+  correctness point, proven by `test_append_does_not_wipe_public_content`.
+- **Labelled through the shared path.** The note reuses `build_vector_records` +
+  `assign_access(explicit_level="private")`, so its label is byte-identical to the file corpus —
+  isolation is proven on the endpoint path (customer-can't / staff-can with a tracer), not assumed.
+- **Gating is two-part and honest.** The **admin token** (`X-API-Key`) gates the *write* (an
+  ingestion endpoint, FR-API-02 — not left open). The **staff role toggle** gates *showing* the
+  form in the UI. The role toggle is a demo stand-in for authenticated staff, not a security
+  boundary on its own.
+
+**Level 2 (future work, not built):**
+- Real authenticated staff accounts (per-user identity), replacing the role toggle as the security
+  boundary for *who may write*.
+- Per-staff / per-department **write isolation** (which staff may add private data to which
+  business, and whose notes are whose).
+- Editing / deleting notes, provenance (who added what, when), and audit.
+- Document upload (files), not just pasted text.
+
+**Cosmetic, accepted:** the fingerprint and business-registry `chunk_count` are not updated on a
+private append (the fingerprint guard only checks `chunking_hash`/`embedding_model`, unchanged);
+the count undercounts private additions. Not worth a write on this path.

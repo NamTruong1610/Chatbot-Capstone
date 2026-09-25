@@ -52,3 +52,15 @@ export async function addBusiness({ domainId, rootUrl, displayName, adminToken }
 export async function getBusinessStatus(domainId) {
   return jsonOrThrow(await fetch(`${API_BASE}/api/crawl/site/${encodeURIComponent(domainId)}`))
 }
+
+export async function ingestPrivateNote({ domainId, title, text, adminToken }) {
+  // Staff-only private content. Admin-token-gated (X-API-Key) like the other ingestion writes;
+  // the note is ingested as access_level=private, retrievable by staff, never by customers.
+  return jsonOrThrow(
+    await fetch(`${API_BASE}/api/ingest/private`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': adminToken },
+      body: JSON.stringify({ domain_id: domainId, title, text }),
+    }),
+  )
+}

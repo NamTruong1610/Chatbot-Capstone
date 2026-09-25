@@ -397,6 +397,25 @@ built once and cached; a domain with no index returns **404** (not a crash).
 
 The `businesses` table backing all three is in §8.
 
+### `POST /api/ingest/private` — add private staff content (FR-API-06)
+
+Ingests pasted text as `access_level=private` for a domain, **appended** to its existing index (no
+crawl, no rebuild — public content is preserved). Synchronous. Requires `X-API-Key` (FR-API-02).
+
+```json
+// request
+{"domain_id": "wyatt-edu", "title": "Escalation contacts", "text": "Escalate audits to Dana Fox…"}
+
+// response
+{"domain_id": "wyatt-edu", "title": "Escalation contacts", "chunks_added": 1, "access_level": "private"}
+```
+
+The text becomes a synthetic private page `internal://<domain_id>/<slug(title)>`, labelled private
+via the tier-1 explicit override (docs/05 §1 `access_rule="explicit_override"`) — the same path the
+file-based private corpus uses. A **customer** query never retrieves it; a **staff** query does
+(prefilter + enforce, RQ2). An uningested domain returns **404**; no admin token → **503**.
+Re-adding the same title+text is idempotent (deterministic chunk ids).
+
 ---
 
 ## 8. Business registry (Postgres)
