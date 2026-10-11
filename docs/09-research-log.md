@@ -8,6 +8,89 @@ with a new one.
 
 ---
 
+## 2026-10-11 — RQ3 (reframed): prompt strictness enforces honest refusal; 8B improves grounding; loosening hurts the bigger model MORE (MEASURED, directional)
+
+**RQ3 reframed away from fine-tuning.** The original RQ3 ("does fine-tuning add measurable
+value on top of RAG?") is parked — no adapter was trained. In its place, RQ3 now asks a
+question the existing harness answers directly and that a real SME deployment actually faces:
+**which LLM configuration — model size × prompt strictness — should serve the chatbot?** A 2×2:
+{`llama3.2:3b`, `llama3.1:8b`} × {`strict_grounded`, `permissive`}. C0-baseline already occupies
+the (3B, strict) cell; the other three are one-line generation-only overrides on C0
+(`C-gen-8b-strict`, `C-gen-3b-permissive`, `C-gen-8b-permissive`).
+
+**Apparatus — the same guarantee as RQ1.** Generation is **not** in the ingest fingerprint, so
+`index_key` is byte-identical across all four (`8dd9cd35699dbbce`): all four `chat-eval` runs
+read C0's one Qdrant index, **no re-ingest**. The four `config_hash`es differ, so each cell is a
+distinct stamped config. Run on `wyatt_rq1.csv` (n=21), one domain, one run each, temperature 0.0.
+
+**The 2×2 (grounding-correctness = containment proxy; refusal-accuracy on the one true
+out-of-scope question, ATAR):**
+
+| config | model | prompt | grounding-correctness | refusal-accuracy |
+|---|---|---|---|---|
+| C0-baseline | llama3.2:3b | strict_grounded | 0.529 | **1.0** |
+| C-gen-8b-strict | llama3.1:8b | strict_grounded | **0.733** (see caveat) | **1.0** |
+| C-gen-3b-permissive | llama3.2:3b | permissive | — | **0.0** |
+| C-gen-8b-permissive | llama3.1:8b | permissive | 0.588 | **0.0** |
+
+**PROMPT axis — permissive destroys honest refusal (the safety finding).** The one genuinely
+out-of-scope question (ATAR — not applicable to VET, absent from the site) is **refused correctly
+under BOTH strict configs** and **HALLUCINATED under BOTH permissive configs**: refusal-accuracy
+collapses **1.0 → 0.0 at both model sizes**. `strict_grounded` is the component that enforces
+honest refusal; **`permissive` is unsafe for a business chatbot at any model size** — a bigger
+model does not rescue it. This is the single clearest result in the 2×2 and it is categorical, not
+marginal.
+
+**MODEL axis (at strict) — 8B grounds better and follows strict MORE faithfully, at a latency
+cost.** 8B lifts grounding faithfulness (0.529 → 0.733) and answer precision, and — the
+non-obvious part — follows `strict_grounded` **more** faithfully than 3B: it **refuses
+thin-context questions that 3B stretched into an answer** (cases 16/17/19 are 8B false-abstentions
+where 3B answered). The bigger model is more conservative under the strict prompt, not less. Cost:
+**2–4× latency** — case 0 is **32 s on 8B vs 5 s on 3B**. That is a real UX cost for a live chat
+surface, not a rounding difference.
+
+**INTERACTION — loosening the prompt hurts the bigger model MORE.** `C-gen-8b-permissive` (0.588)
+scored **below** `C-gen-8b-strict` (0.733): relaxing the prompt made the *larger* model worse —
+verbose, drifting, self-contradicting answers. The prompt-strictness penalty for permissive is
+larger at 8B than at 3B. **Prompt strictness matters more as capability grows**, not less — a
+counter-intuitive result worth stating plainly: you cannot trade a stricter prompt for a bigger
+model; the bigger model needs the strict prompt more.
+
+**Build decision.** `strict_grounded` is **essential** (it is what enforces refusal — the whole
+PROMPT-axis finding). **`3B + strict` is a reasonable default** (honest refusal, acceptable
+grounding, ~5 s latency). **`8B + strict` is the quality-maximising choice if latency permits**
+(best grounding and precision, most faithful refusal, but up to 32 s/question). **`permissive` is
+unsafe — do not ship it at either size.**
+
+**Honest caveats (load-bearing — read with the numbers, not instead of them):**
+
+- **The grounding-correctness denominators DIFFER across configs — do not compare the bare
+  numbers naively.** 8B-strict's **0.733 is "over 15", not "over 21"**: the containment proxy
+  counts a fact as present only if the answer states it, and 8B's *correct* false-abstentions
+  (cases 16/17/19 — refusing thin context rather than stretching) **drop those cases out of the
+  countable set**. So 0.733 is computed on a smaller, easier denominator than C0's 0.529. The
+  headline 0.529 → 0.733 overstates the pure quality lift; the real evidence is **the answers
+  themselves** (8B refuses where 3B guessed, and grounds the rest more cleanly), not the delta
+  between two differently-based fractions. This is **another instance of the standing
+  methodological finding** (2026-08-14): the containment proxy under-measures/mis-bases
+  correct-but-conservative behaviour, and reading the answers against the source is what makes the
+  comparison honest. Report the proxy as a floor, cite the answers as the evidence.
+- **Directional, NOT statistically significant.** n=21, **one domain (Wyatt), one run per cell**,
+  no repetition. A one- or two-question swing moves every aggregate. These are witnessed patterns,
+  not generalisable results — the refusal-collapse is categorical enough to act on; the grounding
+  deltas are suggestive only.
+- **8B latency up to 32 s/question is a real cost**, measured (case 0: 32 s vs 5 s), and it is the
+  deciding factor between the two defensible strict configs, not an aside.
+
+**Contribution.** RQ3's answer on the reframed question: **prompt strictness, not model size, is
+the load-bearing generation choice for an SME chatbot** — `strict_grounded` enforces the honest
+refusal that `permissive` destroys at any size, and loosening the prompt hurts the larger model
+more. Model size is a secondary quality/latency trade within the strict prompt. The deliverable —
+four switchable generation configs measured on one shared index with the existing `chat-eval`
+harness, no re-ingest, each stamped by `config_hash` — is done.
+
+---
+
 ## 2026-08-14 — NAMED FINDING: automated metrics repeatedly mislabelled correct behaviour; reading against source was load-bearing every time
 
 This is not a fifth experiment — it is the **cross-cutting methodological finding** the previous
