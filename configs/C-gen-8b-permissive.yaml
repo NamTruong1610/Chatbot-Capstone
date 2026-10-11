@@ -1,0 +1,12 @@
+id: C-gen-8b-permissive
+extends: C0-baseline
+description: >
+  The far 2x2 corner: larger llama3.1:8b generator AND the permissive prompt. RQ3 arm
+  (both axes): the model x prompt interaction cell, on the SAME index as C0 (generation is
+  not in the ingest fingerprint — no re-ingest). The manipulation is exactly the two keys
+  below; verify with `python -m chatbot.config diff C0-baseline C-gen-8b-permissive`.
+rq: [3]
+overrides:
+  generation:
+    model: llama3.1:8b
+    prompt_variant: permissive
