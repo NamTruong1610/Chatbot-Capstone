@@ -1,0 +1,12 @@
+id: C-gen-8b-strict
+extends: C0-baseline
+description: >
+  Swaps the generator to the larger llama3.1:8b, strict_grounded prompt unchanged. RQ3
+  arm (model axis): isolates the effect of model size at fixed prompt, on the SAME index
+  as C0 (generation is not in the ingest fingerprint — no re-ingest). The manipulation is
+  exactly the one key below; verify with
+  `python -m chatbot.config diff C0-baseline C-gen-8b-strict`.
+rq: [3]
+overrides:
+  generation:
+    model: llama3.1:8b

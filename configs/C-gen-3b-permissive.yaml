@@ -1,0 +1,12 @@
+id: C-gen-3b-permissive
+extends: C0-baseline
+description: >
+  Keeps the baseline llama3.2 generator, swaps the prompt to permissive. RQ3 arm (prompt
+  axis): isolates the effect of the prompt variant at fixed model, on the SAME index as C0
+  (generation is not in the ingest fingerprint — no re-ingest). The manipulation is exactly
+  the one key below; verify with
+  `python -m chatbot.config diff C0-baseline C-gen-3b-permissive`.
+rq: [3]
+overrides:
+  generation:
+    prompt_variant: permissive
