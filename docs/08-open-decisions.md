@@ -437,9 +437,18 @@ exercise workflow chunks, so nothing needs re-running on account of the gap.
 the atomic workflow chunk (FR-CHUNK-02) are now built on branch
 `feature/phase-1-workflow-extraction`. The atomic rule landed as a shared builder rather than
 a `Chunker` protocol method — see OD-19. Configs with `workflow_extraction: true` (C0 and
-everything extending it) now add workflow chunks when an LLM is wired, so results measured
-before this — RQ1–RQ4 — were "minus workflows"; a re-run under the built feature would differ.
-C0 vs C9 is the clean before/after.
+everything extending it) add workflow chunks when an LLM is wired; C9 (`workflow_extraction:
+false`) is the clean off-switch for the before/after ablation.
+
+**The ablation was run, and workflows are inert on this corpus — so RQ1–RQ4 are NOT
+invalidated (2026-10-13, see docs/09).** The concern recorded above (that building the feature
+would change pre-existing measurements) did **not** materialise. C0 (3 workflows synthesised)
+and C9 (0) produced **byte-identical** chat-eval output on `wyatt_rq1.csv` (0.529 grounding, 17
+answered) because workflow chunks never rank in the top-5 for the procedural query — a
+workflow does not out-retrieve its own source prose. The result holds at 8B as well. Because
+the built feature leaves every measured number unchanged, **no RQ1–RQ4 results need re-running
+on account of FR-WF**, and C0-baseline's `workflow_extraction: true` value is safe to keep
+under Hard Rule 8. The workflow synthesis path is retained as a measured negative, not removed.
 
 ### LF-3 — `typed` prose segmentation assumes headings appear as lines in page text
 

@@ -8,6 +8,55 @@ with a new one.
 
 ---
 
+## 2026-10-13 — FR-WF workflow synthesis: built, ablated, and MEASURED INERT on the SME corpus at both model sizes (NEGATIVE result, retained)
+
+**What was built.** The deferred workflow path (docs/08 LF-2) is now implemented on
+`feature/phase-1-workflow-extraction`: a `Workflow` data model (FR-WF-04), a two-pass LLM
+extractor (per-page → site-wide consolidation, FR-WF-02/03), evidence-keyed confidence
+(form > click > prose, FR-WF-05), the ≥2-step and malformed-JSON discard guards
+(FR-WF-06/07), temperature-0 extraction (FR-WF-09), and the atomic `workflow` chunk
+(FR-CHUNK-02). C9-no-workflows is the off-switch (`workflow_extraction: false`).
+
+**The ablation — C0 (workflows on) vs C9 (off), `wyatt_rq1.csv`, 3B, temp 0.0.** Both runs
+produced **byte-identical** chat-eval output: **grounding-correctness 0.529, 17/20 answered,
+refusal-accuracy 1.0 — identical to the pre-FR-WF baseline.** C0 synthesised 3 workflows
+("Apply Now", a chrome-junk "Staff Portal", "Enrol Now"); C9 synthesised none. The numbers did
+not move by a single case.
+
+**Why inert: workflow chunks never enter the top-5.** On the procedural probe ("how do I apply
+step by step") the retrieved context under C0 contained **no workflow chunk** — the synthesised
+procedure does not out-retrieve the source prose it was distilled from (the enrolment/apply
+page text embeds closer to the query than the structured `WORKFLOW:`-prefixed rendering). The
+feature adds rows to the index that the retriever never selects, so generation sees the same
+context with or without them. Confirmed by index dump: 534 chunks, workflow chunk present in
+the collection, absent from every top-5.
+
+**8B confirms, for a different reason.** At `llama3.1:8b` the extractor **over-produced** — 23
+candidate workflows, mostly redundant, and the single site-wide consolidation call (all
+candidates + link graph in one prompt) **timed out** (`httpx.ReadTimeout`, 120 s) on the
+consumer machine. The 8B chat-eval was **0.733 / 15 answered — identical to RQ3's prose-only
+8B cell**: workflows changed nothing at 8B either. (The timeout now degrades gracefully to the
+per-page candidates rather than crashing the ingest — commit a9954fc.)
+
+**Three compounding causes of the null result.** (1) *Extraction quality* — 3B under-extracts
+(3 workflows, one pure chrome junk), 8B over-extracts (23 redundant); neither is clean. (2)
+*Consolidation does not fit one machine* — the whole-site merge is a single large call that
+times out at 8B, so cross-page merging is exactly where it is needed least reliable. (3)
+*Structured text embeds worse than prose for these queries* — the atomic workflow rendering,
+by design not split, is a worse dense-retrieval match than the natural-language page it came
+from. Duplicate workflows at 8B do **not** affect the measured result precisely because
+workflows never reach the top-5.
+
+**Decision — keep it, as an honest measured negative.** RQ1–RQ4 are **unaffected** (every
+number reproduces with the feature off *and* on), so no prior result is re-run and
+C0-baseline's `workflow_extraction: true` stays unchanged under Hard Rule 8 (docs/08 LF-2
+updated). The branch is retained as-measured rather than tuned post-hoc to chase a positive:
+the finding *is* that workflow synthesis, as specified, buys nothing on a small VET-provider
+site at ≤8B on one consumer GPU. Chasing a win (better trigger prompts, chrome filtering,
+boosting workflow chunks at retrieval) is scoped as future work in LF-1/OD-19, not done here.
+
+---
+
 ## 2026-10-11 — RQ3 (reframed): prompt strictness enforces honest refusal; 8B improves grounding; loosening hurts the bigger model MORE (MEASURED, directional)
 
 **RQ3 reframed away from fine-tuning.** The original RQ3 ("does fine-tuning add measurable
