@@ -27,6 +27,7 @@ from chatbot.evaluation.generation_runner import (
 )
 from chatbot.evaluation.runner import aggregate, run_config, write_results
 from chatbot.evaluation.testset import load_testset
+from chatbot.generation.client import build_llm_client
 from chatbot.ingestion.pipeline import ingest, load_corpus
 from chatbot.pipeline import IndexNotReadyError, build_chat_pipeline
 from chatbot.retrieval import build_retriever
@@ -55,6 +56,8 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         print(f"  + {len(private_pages)} private page(s) from {args.private_corpus.name}")
     embedder = build_embedder(cfg.embedding)
     store = VectorStore(cfg.store, dimensions=embedder.dimensions)
+    # FR-WF: extraction needs the LLM; wire it when the config asks for workflows.
+    llm = build_llm_client(cfg.generation) if cfg.ingestion.workflow_extraction else None
     result = ingest(
         cfg,
         domain_id=args.domain,
@@ -62,6 +65,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         pages=pages,
         store=store,
         embedder=embedder,
+        llm=llm,
         crawl_manifest=manifest,
     )
     fp = result.fingerprint

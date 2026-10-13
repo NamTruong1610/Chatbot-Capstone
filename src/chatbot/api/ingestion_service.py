@@ -24,7 +24,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from chatbot.config.schema import EmbeddingConfig, IngestionConfig, ResolvedConfig, StoreConfig
+from chatbot.config.schema import (
+    EmbeddingConfig,
+    GenerationConfig,
+    IngestionConfig,
+    ResolvedConfig,
+    StoreConfig,
+)
+from chatbot.generation.client import LLMClient, build_llm_client
 from chatbot.ingestion.crawler.base import CrawledPage, Crawler, build_crawler
 from chatbot.ingestion.pipeline import (
     IngestResult,
@@ -141,6 +148,7 @@ class CrawlIngestWorker:
         embedder_factory: Callable[[EmbeddingConfig], TextEmbedder] = build_embedder,
         store_factory: Callable[[StoreConfig, int], VectorStore] = _default_store,
         ingest_fn: Callable[..., IngestResult] = ingest,
+        llm_factory: Callable[[GenerationConfig], LLMClient] = build_llm_client,
     ) -> None:
         self._cfg = cfg
         self._corpus_dir = corpus_dir
@@ -148,6 +156,7 @@ class CrawlIngestWorker:
         self._embedder_factory = embedder_factory
         self._store_factory = store_factory
         self._ingest_fn = ingest_fn
+        self._llm_factory = llm_factory
 
     def _cfg_with_bounds(self, max_pages: int | None, max_depth: int | None) -> ResolvedConfig:
         """Apply per-crawl page/depth bounds. These touch ONLY ``ingestion`` — not chunking or
@@ -209,6 +218,12 @@ class CrawlIngestWorker:
             )
         embedder = self._embedder_factory(run_cfg.embedding)
         store = self._store_factory(run_cfg.store, embedder.dimensions)
+        # FR-WF: an admin crawl extracts workflows too, so wire the LLM when the flag is on.
+        llm = (
+            self._llm_factory(run_cfg.generation)
+            if run_cfg.ingestion.workflow_extraction
+            else None
+        )
         result = self._ingest_fn(
             run_cfg,
             domain_id=domain_id,
@@ -216,6 +231,7 @@ class CrawlIngestWorker:
             pages=pages,
             store=store,
             embedder=embedder,
+            llm=llm,
             crawl_manifest=manifest,
         )
         return IngestOutcome(chunk_count=result.chunk_count, crawl_manifest=manifest)

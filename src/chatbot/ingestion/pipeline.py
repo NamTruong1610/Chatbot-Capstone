@@ -8,14 +8,18 @@ the evaluation runner can refuse a mismatched score later.
 Deterministic and idempotent: point ids derive from the chunk id, and a re-ingest of the same
 config first drops that (domain_id, index_key) partition, so re-running never duplicates.
 
-Note (LF-2): workflow synthesis (FR-WF) is unbuilt, so ``ingestion.workflow_extraction`` has
-no effect here — ``typed`` produces table/qa/prose chunks only. This first C0 is therefore
-"C0 minus workflows"; the runner stamps that in run metadata so the number is not over-read.
+Workflow synthesis (FR-WF) runs here when ``ingestion.workflow_extraction`` is on AND an
+``LLMClient`` is supplied: the extractor turns crawled pages into :class:`Workflow` objects,
+which are chunked atomically alongside the per-page table/qa/prose chunks. Without an
+``llm`` (e.g. offline unit tests), extraction is skipped with a warning and the index is
+prose-only — the pre-FR-WF "minus workflows" behaviour. The production callers (the eval
+ingest CLI and the crawl worker) always wire the LLM; see ``docs/08`` OD-16.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -23,12 +27,17 @@ from pathlib import Path
 from typing import Any
 
 from chatbot.config.schema import ResolvedConfig
+from chatbot.generation.client import LLMClient
 from chatbot.ingestion.access import assign_access
-from chatbot.ingestion.chunking import IngestContext, build_chunker
+from chatbot.ingestion.chunking import Chunk, IngestContext, build_chunker
+from chatbot.ingestion.chunking.workflow import build_workflow_chunks
 from chatbot.ingestion.crawler.base import CrawledPage, Heading, Table
+from chatbot.ingestion.workflow import Workflow, WorkflowExtractor
 from chatbot.store.embedder import TextEmbedder
 from chatbot.store.fingerprint import DEFAULT_INDEX_DIR, IndexFingerprint, write_fingerprint
 from chatbot.store.vector import VectorRecord, VectorStore
+
+logger = logging.getLogger(__name__)
 
 # Stable namespace so a chunk_id always maps to the same Qdrant point id (idempotent upsert).
 _POINT_NAMESPACE = uuid.UUID("5f2b1c9e-6a4d-4c1e-9b7a-2d3e4f5a6b7c")
@@ -78,6 +87,22 @@ def _page_from_dict(raw: dict[str, Any]) -> CrawledPage:
     )
 
 
+def _workflow_access(
+    chunk: Chunk, cfg: ResolvedConfig, overrides: dict[str, str]
+) -> tuple[str, str]:
+    """Access for a workflow chunk: private if ANY source page is private (fail-closed, OD-16).
+
+    A workflow can span pages, so its access is the most restrictive of its sources rather than
+    the extractor's inferred level — trusting the model for access control would risk a private
+    procedure leaking to a customer (the RQ2 guarantee). URL-driven and deterministic.
+    """
+    urls = chunk.all_source_urls or ((chunk.source_url,) if chunk.source_url else ())
+    levels = {
+        assign_access(u, cfg.access_control, explicit_level=overrides.get(u))[0] for u in urls
+    }
+    return ("private" if "private" in levels else "public"), "workflow_inherit"
+
+
 def build_vector_records(
     cfg: ResolvedConfig,
     *,
@@ -85,6 +110,7 @@ def build_vector_records(
     document_id: str,
     pages: list[CrawledPage],
     embedder: TextEmbedder,
+    workflows: list[Workflow] | None = None,
 ) -> tuple[list[VectorRecord], dict[str, int]]:
     """Chunk → label → embed ``pages`` into VectorRecords, returning them and a by-type count.
 
@@ -103,6 +129,9 @@ def build_vector_records(
     )
     chunker = build_chunker(cfg.chunking)
     chunks = [c for page in pages for c in chunker.chunk_page(page, ctx)]
+    if workflows:
+        # Atomic workflow chunks (FR-CHUNK-02) join the per-page chunks in the same partition.
+        chunks = chunks + build_workflow_chunks(workflows, ctx, pages)
     if not chunks:
         raise ValueError(f"no chunks produced for {cfg.id} on {domain_id}; nothing to ingest")
 
@@ -113,15 +142,33 @@ def build_vector_records(
     records: list[VectorRecord] = []
     by_type: dict[str, int] = {}
     for chunk, vector in zip(chunks, vectors, strict=True):
-        level, rule = assign_access(
-            chunk.source_url, cfg.access_control, explicit_level=overrides.get(chunk.source_url)
-        )
+        if chunk.chunk_type == "workflow":
+            level, rule = _workflow_access(chunk, cfg, overrides)
+        else:
+            level, rule = assign_access(
+                chunk.source_url, cfg.access_control, explicit_level=overrides.get(chunk.source_url)
+            )
         payload = chunk.to_payload(access_level=level, access_rule=rule)
         payload["index_key"] = index_key  # partitions the shared collection (Q1 design)
         point_id = str(uuid.uuid5(_POINT_NAMESPACE, chunk.chunk_id))
         records.append(VectorRecord(point_id=point_id, vector=vector, payload=payload))
         by_type[chunk.chunk_type] = by_type.get(chunk.chunk_type, 0) + 1
     return records, by_type
+
+
+def _extract_workflows(
+    cfg: ResolvedConfig, pages: list[CrawledPage], llm: LLMClient | None
+) -> list[Workflow]:
+    """Run FR-WF iff the flag is on AND an LLM is wired; otherwise prose-only, loudly (OD-16)."""
+    if not cfg.ingestion.workflow_extraction:
+        return []
+    if llm is None:
+        logger.warning(
+            "ingestion.workflow_extraction is on but no LLMClient was supplied; "
+            "ingesting prose-only (no workflows). Wire an llm to enable FR-WF."
+        )
+        return []
+    return WorkflowExtractor(llm).extract(pages)
 
 
 def ingest(
@@ -132,6 +179,7 @@ def ingest(
     pages: list[CrawledPage],
     store: VectorStore,
     embedder: TextEmbedder,
+    llm: LLMClient | None = None,
     crawl_manifest: str = "",
     index_dir: Path = DEFAULT_INDEX_DIR,
 ) -> IngestResult:
@@ -143,8 +191,14 @@ def ingest(
     it, use ``ingest_private_note`` (append).
     """
     index_key = cfg.index_key()
+    workflows = _extract_workflows(cfg, pages, llm)
     records, by_type = build_vector_records(
-        cfg, domain_id=domain_id, document_id=f"site:{root_url}", pages=pages, embedder=embedder
+        cfg,
+        domain_id=domain_id,
+        document_id=f"site:{root_url}",
+        pages=pages,
+        embedder=embedder,
+        workflows=workflows,
     )
 
     store.ensure_ready()

@@ -374,6 +374,39 @@ that depends on it" case: RQ2 is the first sweep to use roles, and it uses the c
 Deferred engineering findings from live crawls — not decisions, not fixed now; tracked so
 the owning phase picks them up.
 
+## OD-19 — FR-WF build decisions: workflow chunking, access, and the extraction seam
+
+**Status:** Decided (implementation) · **Decider:** implementer · settled while building
+`feature/phase-1-workflow-extraction`.
+
+Three choices the FR-WF spec left open, recorded so a reviewer sees the reasoning.
+
+1. **Workflow chunking is a shared builder, not a `Chunker` protocol method.** `docs/04` §3
+   sketched `chunk_workflow` joining the `Chunker` protocol. But a workflow is atomic however
+   the surrounding prose is chunked (typed vs fixed vs recursive), so the rule is
+   strategy-independent. Putting it on the protocol would duplicate the identical rule across
+   every chunker and force `fixed`/`recursive` to carry a method with no special behaviour. It
+   lives in `chunking/workflow.py::build_workflow_chunks`, called by the pipeline after
+   extraction. `docs/04` §3 is updated to match.
+
+2. **A workflow chunk's access is the most restrictive of its source pages — never the
+   extractor's inferred level (fail-closed).** FR-WF-04 has the extractor record an
+   `access_level`, but trusting an LLM for access control would risk a private procedure
+   leaking to a customer (the RQ2 guarantee). The stored `access_level` is derived at ingest
+   from the workflow's source pages by the same deterministic URL rule as any chunk
+   (`access_rule: "workflow_inherit"`, added to `docs/05` §1): private if ANY source page is
+   private, else public. The extractor's guess is kept only as `Workflow.access_level`
+   metadata.
+
+3. **Extraction runs iff `workflow_extraction` is on AND an `LLMClient` is injected.**
+   Extraction needs the generation model (`generation.model`, temperature 0.0 per FR-WF-09).
+   `ingest` / `CrawlIngestWorker` / the eval `ingest` CLI take an optional `llm`; the two
+   production callers wire `build_llm_client(cfg.generation)` when the flag is on, while
+   offline unit tests pass none and get prose-only with a warning (so existing pipeline tests
+   are unchanged). The digest caps and the extraction `max_tokens` are method constants, not
+   experimental config — identical across every config and not a varied dimension (CLAUDE.md
+   rule 1 governs values that differ *between* configurations).
+
 ### LF-1 — Control extraction captures page chrome (workflow-extraction phase)
 
 Observed on the Wyatt live crawl (2026-07-25): control extraction currently captures page
@@ -399,6 +432,23 @@ Recorded so "typed chunking" is never silently read as all four rules. **Owning 
 FR-WF. When it lands it adds the `Workflow` type, `chunk_workflow` to the `Chunker` protocol
 (docs/04 §3), and the atomic rule + tests. No results measured with `typed` before then
 exercise workflow chunks, so nothing needs re-running on account of the gap.
+
+**Resolved (FR-WF, 2026-10-13).** The `Workflow` model, the two-pass extractor (FR-WF), and
+the atomic workflow chunk (FR-CHUNK-02) are now built on branch
+`feature/phase-1-workflow-extraction`. The atomic rule landed as a shared builder rather than
+a `Chunker` protocol method — see OD-19. Configs with `workflow_extraction: true` (C0 and
+everything extending it) add workflow chunks when an LLM is wired; C9 (`workflow_extraction:
+false`) is the clean off-switch for the before/after ablation.
+
+**The ablation was run, and workflows are inert on this corpus — so RQ1–RQ4 are NOT
+invalidated (2026-10-13, see docs/09).** The concern recorded above (that building the feature
+would change pre-existing measurements) did **not** materialise. C0 (3 workflows synthesised)
+and C9 (0) produced **byte-identical** chat-eval output on `wyatt_rq1.csv` (0.529 grounding, 17
+answered) because workflow chunks never rank in the top-5 for the procedural query — a
+workflow does not out-retrieve its own source prose. The result holds at 8B as well. Because
+the built feature leaves every measured number unchanged, **no RQ1–RQ4 results need re-running
+on account of FR-WF**, and C0-baseline's `workflow_extraction: true` value is safe to keep
+under Hard Rule 8. The workflow synthesis path is retained as a measured negative, not removed.
 
 ### LF-3 — `typed` prose segmentation assumes headings appear as lines in page text
 
