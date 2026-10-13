@@ -1,0 +1,18 @@
+id: C9-no-workflows
+extends: C0-baseline
+description: >
+  The supervisor ablation (docs/03 §C9, OD-10): the baseline with workflow synthesis turned
+  OFF. C0 vs C9 is the direct test of whether LLM-synthesised workflow documents (FR-WF)
+  outperform chunking the same prose and affordances they were derived from — the question
+  the project was built around and that nothing in the literature review covers. It changes
+  ONLY `ingestion.workflow_extraction`, so it is one extra ingest + eval per domain. Because
+  `workflow_extraction` is not part of `index_key` (chunking+embedding only), C9 needs its
+  OWN re-ingest rather than reusing C0's index — the two indexes differ by the workflow
+  chunks C0 adds and C9 omits. Verify with
+  `python -m chatbot.config diff C0-baseline C9-no-workflows`.
+# rq is provisional (OD-10, open): whether the workflow ablation is a stated RQ or a
+# discussion finding is for the supervisor. Metadata only (not hashed).
+rq: []
+overrides:
+  ingestion:
+    workflow_extraction: false

@@ -143,9 +143,12 @@ provenance — leaving `access_level`/`access_rule` (FR-ACL-02 stage) and `inges
 (persist time) to later stages; that omission is also what keeps `chunk_page` output
 byte-identical on a re-run (FR-CHUNK-06, no timestamp in the hashed content).
 
-`chunk_workflow(wf: Workflow)` is deferred: it consumes synthesised `Workflow` objects and
-workflow extraction (FR-WF) is a later phase with no data model built yet. It joins this
-protocol when FR-WF lands (see `docs/08`).
+Workflow chunking (FR-CHUNK-02 `workflow` atomic) is implemented NOT as a per-strategy
+`Chunker` method but as a shared builder `chunking/workflow.py::build_workflow_chunks`, which
+the pipeline calls after extraction. A workflow is atomic however the surrounding prose is
+chunked, so the rule is strategy-independent and lives in one place rather than being
+duplicated across `typed`/`fixed`/`recursive` (this is the decision recorded in `docs/08`
+OD-19, revising the earlier "joins the Chunker protocol" sketch).
 
 ```python
 # retrieval/base.py

@@ -26,6 +26,8 @@ at ingest → raise (FR-CHUNK-05).
   "access_level":    str,    # required — public | private
   "access_rule":     str,    # required — which rule assigned it:
                              #   "explicit" | "url_pattern:<pattern>" | "default"
+                             #   | "workflow_inherit" — workflow chunk only: the most
+                             #     restrictive access of its source pages (FR-WF, OD-19)
 
   # ── provenance ────────────────────────────────────────
   "source_url":      str,    # "" for uploads

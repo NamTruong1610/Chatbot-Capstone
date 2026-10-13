@@ -56,8 +56,8 @@ Runs alongside the proposal's "Setup and Data Collection".
 | P1-5 | ☐ Interaction probing + state restore | FR-CRAWL-06 | Accordion click captures revealed text; page restored after |
 | P1-6 | ☐ Raw corpus persistence + manifest | FR-CRAWL-09/10 | JSON written before processing; manifest lists skips and blocks |
 | P1-7 | ☐ Idempotent re-ingest | FR-CRAWL-12 | Crawling twice yields the same chunk count |
-| P1-8 | ☐ Affordance digest | FR-WF-01 | Digest size flat across a 2KB and a 200KB page |
-| P1-9 | ☐ Two-pass workflow extraction | FR-WF-02/03/06/07 | Multi-page booking flow merges into one workflow; malformed JSON discarded |
+| P1-8 | ☑ Affordance digest | FR-WF-01 | Digest size flat across a 2KB and a 200KB page |
+| P1-9 | ☑ Two-pass workflow extraction | FR-WF-02/03/06/07 | Multi-page booking flow merges into one workflow; malformed JSON discarded |
 | P1-10 | ☐ Access level assignment + `access_rule` | FR-ACL-01/02 | `/admin/*` → private, rule recorded |
 
 **Gate:** `make crawl` produces a persisted corpus, a manifest, and a workflow list for a
@@ -71,7 +71,7 @@ real site.
 |---|---|---|---|
 | P2-1 | ☐ `fixed` chunker (Appendix A replication) | FR-CHUNK-01 | 3-line chunks; reproduces the Appendix A table split |
 | P2-2 | ☐ `recursive` chunker | FR-CHUNK-01 | Respects size and overlap |
-| P2-3 | ☐ `typed` chunker — workflow atomic, table header-repeat, qa paired, prose in headings | FR-CHUNK-02 | Table chunk carries headers; **the Appendix A table query now hits** |
+| P2-3 | ☑ `typed` chunker — workflow atomic, table header-repeat, qa paired, prose in headings | FR-CHUNK-02 | Table chunk carries headers; **the Appendix A table query now hits** (workflow-atomic added with FR-WF, as a shared builder — OD-19) |
 | P2-4 | ☐ Heading breadcrumb, toggleable | FR-CHUNK-03 | Off/on changes chunk text only |
 | P2-5 | ☐ Chunk metadata + validation | FR-CHUNK-05 | Missing `access_level` raises |
 | P2-6 | ☐ Embedding + upsert, configurable model | FR-RET-10 | Dimension mismatch refuses to query |
