@@ -95,3 +95,29 @@ def test_confidence_is_keyed_to_evidence_not_trusted_from_model() -> None:
     fake = FakeLLM([_WF_B])  # evidence "click"
     wf = WorkflowExtractor(fake).extract([_page("https://ex.com/a")])[0]
     assert wf.confidence == 0.6 and wf.evidence == "click"
+
+
+class FlakyLLM:
+    """Per-page passes succeed; the consolidation pass times out (the real 8B failure mode)."""
+
+    def __init__(self, page_response: str) -> None:
+        self.page_response = page_response
+        self.calls = 0
+
+    def complete(
+        self, *, system: str, user: str, temperature: float, max_tokens: int,
+        history: list[dict[str, str]] | None = None,
+    ) -> str:
+        self.calls += 1
+        if "CANDIDATE WORKFLOWS" in user:  # pass 2
+            raise TimeoutError("read timed out")
+        return self.page_response
+
+
+def test_consolidation_timeout_degrades_to_candidates_not_a_crash() -> None:
+    # A slow/failed pass-2 call must not sink the ingest: keep the per-page candidates.
+    fake = FlakyLLM(_WF)
+    workflows = WorkflowExtractor(fake).extract(
+        [_page("https://ex.com/a"), _page("https://ex.com/b")]
+    )
+    assert len(workflows) == 2  # both per-page candidates survived the consolidation timeout

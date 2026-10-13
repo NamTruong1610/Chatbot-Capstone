@@ -119,7 +119,19 @@ class WorkflowExtractor:
         if not candidates:
             logger.info("no workflows found; site appears purely informational")
             return []
-        return self._consolidate(candidates, pages)
+        try:
+            return self._consolidate(candidates, pages)
+        except Exception as exc:  # noqa: BLE001 - a slow/failed pass 2 must not sink the ingest
+            # Consolidation is one big LLM call (all candidates + the link graph); on a large
+            # model it can time out (httpx.ReadTimeout). A failure here must degrade to the
+            # per-page candidates — which already passed the >=2-step and JSON guards — never
+            # crash the whole ingest. The cost is only the loss of cross-page merging.
+            logger.warning(
+                "workflow consolidation failed (%s); keeping %d unconsolidated candidate(s)",
+                exc,
+                len(candidates),
+            )
+            return candidates
 
     # ── pass 1 ─────────────────────────────────────────────────────────────────────
 
