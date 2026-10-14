@@ -127,14 +127,14 @@ Proposal weeks 6–9 are "Experimentation and Development". The harness must lan
 
 | ID | Task | Reqs | Acceptance |
 |---|---|---|---|
-| P5-1 | ☐ Author `C1`–`C14` | `docs/03` §3 | Each `diff` against C0 shows exactly one manipulation |
+| P5-1 | ☐ Author `C1`–`C9` and the `C-gen-*` configs | `docs/03` §3 | Each `diff` against C0 shows exactly one manipulation |
 | P5-2 | ☐ Ingest both domains under every chunking arm | — | See compute budget below |
 | P5-3 | ☐ Run RQ1 sweep, both domains | RQ1 | Tables + paired comparisons |
 | P5-4 | ☐ Run chunking sweep, both domains | Appendix A | `C0` vs `C5` effect size computed |
 | P5-5 | ☐ Run RQ2 sweep under both roles | RQ2 | Leakage counts; `C12` ceiling established |
 | P5-6 | ☐ Run supervisor ablations `C9`, `C10` | Supervisor | Workflow extraction's contribution isolated |
-| P5-7 | ☐ QLoRA training script + run | RQ3 | Adapter trains within VRAM budget; cost recorded |
-| P5-8 | ☐ Run RQ3 comparison | RQ3 | Includes `C14` prompt control |
+| P5-7 | ~~QLoRA training script + run~~ — **dropped 2026-10-14**, fine-tuning off the table (docs/09) | — | n/a |
+| P5-8 | ☐ Run RQ3 comparison (model size × prompt strictness) | RQ3 | 2×2 over `C0` / `C-gen-*`; includes the permissive-prompt control |
 | P5-9 | ☐ RAGAS integration, judge model pinned | FR-EVAL-10 | Judge version in `run.json` |
 | P5-10 | ☐ RQ4 cross-domain grouping + rank correlation | RQ4 | Configuration orderings compared across domains |
 
@@ -178,7 +178,7 @@ Chunking and embedding arms each require a **separate ingest per domain**
 | `C5` fixed, `C6` recursive, `C7` table-split, `C8` no-breadcrumb | 8 |
 | `C9` no-workflows, `C10` no-interaction | 4 (different crawl or extraction) |
 | Embedding variants, if run | 2 per model |
-| `C1`–`C4`, `C11`–`C14` | 0 — reuse `C0` index |
+| `C1`–`C4`, `C-gen-*` | 0 — reuse `C0` index |
 
 **14+ full ingests.** Each is a crawl (minutes, network-bound, rate-limited) plus
 embedding (minutes). Two implications:
@@ -196,7 +196,7 @@ embedding (minutes). Two implications:
 | Test sets slip | Not complete by end W3 | Cut to 30 pairs/domain; use AI-synthesised pairs with manual validation, flag proportion (`docs/06` §9) |
 | Interactive crawling breaks on real sites | Repeated failures in W3 | Fall back to `interaction_probing: false`; `C10` becomes the headline rather than an ablation |
 | Playwright unusable on the dev machine | W2 | Static backend; **record it** (FR-CRAWL-03) and narrow the workflow claims |
-| QLoRA exceeds VRAM | W8 | Smaller base model, or report RQ3 as a null with the resource constraint as the finding |
+| ~~QLoRA exceeds VRAM~~ | — | **Moot — fine-tuning dropped 2026-10-14** (docs/09). RQ3 is now model size × prompt strictness, no training |
 | Chunking arms do not fit the schedule | W8 | Run `C0` vs `C5` only. That single comparison is the Appendix A question and is worth more than `C6`–`C8` combined |
 | Scope creep into production concerns | Any time | `docs/01` §7 is the scope boundary. Re-read it |
 

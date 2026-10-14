@@ -22,7 +22,7 @@ but cannot be reconfigured and re-measured has failed the brief.
 |---|---|---|
 | RQ1 | Does hybrid retrieval + reranking beat vector search alone? | `retrieval.mode` |
 | RQ2 | What strategies let one system serve public and private users? | `access_control.strategy`, `role` |
-| RQ3 | Does fine-tuning add measurable value on top of RAG? | `generation.model` / `generation.adapter` |
+| RQ3 | Which generation configuration (model size × prompt strictness) best serves the chatbot? | `generation.model`, `generation.prompt_variant` |
 | RQ4 | Does pipeline performance generalise across businesses? | `domain_id` |
 
 Full requirements: `docs/02-requirements.md`. Every requirement carries an ID

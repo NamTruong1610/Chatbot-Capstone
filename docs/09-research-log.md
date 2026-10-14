@@ -8,6 +8,35 @@ with a new one.
 
 ---
 
+## 2026-10-14 — Fine-tuning formally dropped; `generation.adapter` removed; RQ3 stays the model×prompt study
+
+**Decision.** Fine-tuning is off the table for this project. No QLoRA adapter was ever trained
+(the RQ3 reframe of 2026-10-11 already parked it), and the dormant `generation.adapter` config
+field — carried but never read by any code path — has now been removed from the schema and from
+`C0-baseline.yaml`. This closes the fine-tuning branch of OD-3. RQ3 remains the reframed
+generation study: model size (`llama3.2` 3B vs `llama3.1:8b`) × prompt strictness (strict vs
+permissive), reported in §5.3 of the report.
+
+**Reproducibility note (Hard Rule 8).** `generation.adapter` sat inside the hashed `generation`
+section, so removing it changes `config_hash` for every config — C0 went
+`721c205e…870041` → `fbb90087…653188`. This is a deliberate, recorded baseline change, not a
+silent one. It does **not** change any measured result: `adapter` was always `null` and never
+reached the generator, so retrieval and generation outputs are byte-identical before and after;
+only the provenance stamp moved. A re-run of any RQ reproduces the same numbers under the new
+hash. The pinned `C0_BASELINE_HASH` guardrail in `tests/unit/config/test_hash.py` was updated in
+the same commit, with the prior hash kept in its comment for the audit trail. `index_key` is
+unaffected (it hashes chunking + embedding only), so no re-ingest is required.
+
+**Scope.** Code, `C0-baseline`, the requirements (FR-GEN-02 withdrawn, ID retained), the config
+matrix (docs/03 §RQ3), the evaluation protocol (docs/06 §RQ3), and the CLAUDE.md RQ-table row
+were updated for consistency. Historical records of the original fine-tuning intent (this log's
+2026-10-11 reframe entry, OD-3's analysis) are kept as-is; the 2026-10-11 entry now carries its
+2026-10-14 resolution. Planning/architecture mentions of the never-built QLoRA task (docs/01
+scope note and compute constraint, docs/04 tree's `finetune_qlora.py` and the `C2..C14` range,
+docs/07 P5-1/P5-7/P5-8 and the QLoRA risk row) were tidied in the same change for consistency.
+
+---
+
 ## 2026-10-13 — FR-WF workflow synthesis: built, ablated, and MEASURED INERT on the SME corpus at both model sizes (NEGATIVE result, retained)
 
 **What was built.** The deferred workflow path (docs/08 LF-2) is now implemented on

@@ -109,8 +109,8 @@ Priority: **M** must have (thesis fails without it) · **S** should have · **C*
 
 | ID | Requirement | Pri | Trace |
 |---|---|---|---|
-| FR-GEN-01 | `generation.model` and `generation.base_url` configurable, so a fine-tuned model substitutes without code changes. | M | RQ3 |
-| FR-GEN-02 | `generation.adapter` optionally names a QLoRA adapter to load. | M | RQ3 |
+| FR-GEN-01 | `generation.model` and `generation.base_url` configurable, so a different or larger model substitutes without code changes. | M | RQ3 |
+| FR-GEN-02 | *Withdrawn 2026-10-14 — fine-tuning dropped (docs/08 OD-3, docs/09). The `generation.adapter` / QLoRA-loading requirement no longer applies; ID retained to keep numbering stable.* | — | — |
 | FR-GEN-03 | `generation.prompt_variant` selects a named prompt template from `prompts/`. At minimum `strict_grounded` and `permissive` (a control that does not instruct abstention). | M | RQ1/RQ3 |
 | FR-GEN-04 | Under `strict_grounded`, the model must abstain with an exact configured phrase when context is insufficient. | M | Hallucination |
 | FR-GEN-05 | Retrieved chunks are numbered in the prompt and the model cites markers. Responses return a source list with URLs. | S | Trust, RQ1 |

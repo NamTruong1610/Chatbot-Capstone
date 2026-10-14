@@ -1,6 +1,6 @@
 """Ingest one corpus under one config: crawl JSON → chunk → label → embed → store.
 
-Wires the *real* Phase-2 chunkers (``build_chunker``, not the spike) to the store, stamping
+Wires the Phase-2 chunkers (``build_chunker``) to the store, stamping
 every chunk with the ``index_key`` that partitions the shared collection by chunking+embedding
 (so C0–C4 share an index and C5 gets its own). Writes the index fingerprint (docs/04 §5) so
 the evaluation runner can refuse a mismatched score later.

@@ -44,12 +44,16 @@ def test_metadata_does_not_affect_the_hash(tmp_path: Path) -> None:
     assert load_config("a", tmp_path).config_hash() == load_config("b", tmp_path).config_hash()
 
 
-# The C0-baseline hash recorded BEFORE the Phase 8 `conversation` block was added. Every
-# RQ1/RQ2/RQ4 result already stamped by the user carries this exact string. If adding the
-# conversation serving block (or anything else) ever changes it, that audit link breaks and
-# every prior result silently stops matching a re-run — CLAUDE.md rules 7 and 8. This literal
-# is the guardrail: it must not change without a deliberate re-run of every affected result.
-C0_BASELINE_HASH = "721c205e61dfa789081d53f04007b2ea2766c62b59f14abd5cb10e0692870041"
+# The C0-baseline config hash. This literal is the guardrail (CLAUDE.md rules 7 and 8): it must
+# not change without a deliberate decision, because every stamped result carries it and a change
+# silently breaks the audit link to a re-run.
+#
+# Changed deliberately on 2026-10-14: `generation.adapter` was removed when fine-tuning was
+# dropped (docs/08 OD, docs/09). `adapter` was always null and never read, so the generated
+# answers — and therefore every RQ1/2/3/4 *number* — are unchanged; only the hash string moved,
+# as `adapter` sat inside the hashed `generation` section. A re-run reproduces the same values
+# under this new hash. Prior hash (for the audit trail): 721c205e…870041.
+C0_BASELINE_HASH = "fbb9008714614bf5f40d7bae8e35ca6a53af739a1994da2f70619d5a67653188"
 
 
 def test_config_hash_unchanged_by_conversation() -> None:

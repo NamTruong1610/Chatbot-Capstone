@@ -110,7 +110,7 @@ class Chunk:
 
         The chunker does not own ``access_level``/``access_rule`` (FR-ACL-02 stage) or
         ``ingested_at`` (stamped at persist), so they are caller-supplied; the defaults let a
-        no-ACL caller (the spike runner) round-trip a chunk without an access stage. Only the
+        no-ACL caller round-trip a chunk without an access stage. Only the
         type-specific fields that are set for this chunk_type appear, matching docs/05 §1.
         """
         from datetime import UTC, datetime
