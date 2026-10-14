@@ -31,6 +31,17 @@ config so this is a one-line change (FR-GEN-01). But decide *before* Phase 5 —
 on the wrong base model is a week you cannot get back, and RQ3's whole framing is
 "is this worth it for an SME on consumer hardware", which is a claim about the 7B case.
 
+**Resolved (2026-10-14).** Fine-tuning is dropped. No QLoRA adapter was trained, and the
+`generation.adapter` field has been removed from the schema and `C0-baseline.yaml`. RQ3 is
+reframed to **model size × prompt strictness** — a 2×2 over {`llama3.2` 3B, `llama3.1:8b`} ×
+{`strict_grounded`, `permissive`} — which the existing harness answers with no fine-tune (see
+docs/09 and docs/03 §RQ3). The model-size half of this decision (3B vs 8B) is therefore
+answered empirically under the reframed RQ3 rather than left to judgement here. Removing
+`adapter` changed C0's `config_hash` (it sat in the hashed `generation` section), so the pinned
+`C0_BASELINE_HASH` in `tests/unit/config/test_hash.py` was updated in the same change; because
+`adapter` was always null and never read, every measured RQ number is unchanged — only the hash
+string moved, and a re-run reproduces the same values under the new stamp.
+
 **Interim state.** `C0-baseline.yaml` carries `generation.model: llama3.2` so it validates
 today. This is provisional, not a decision. Changing it before P5-8 is free — no
 generation results exist until then, and no retrieval metric depends on the generator

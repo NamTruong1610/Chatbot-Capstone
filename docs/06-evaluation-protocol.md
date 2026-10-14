@@ -239,15 +239,19 @@ same claim, and a marker will look for that distinction.
 - **Any non-zero leak under `C0` is a failed run.** Investigate `access_rule` first —
   the cause is almost certainly ingest mislabelling, not retrieval.
 
-### RQ3 — fine-tuning
+### RQ3 — generation (model size × prompt strictness)
 
-- **Configs:** best RQ1 config vs `C13-finetuned` (same retrieval, tuned generator)
-- **Held constant:** retrieval, chunking, corpus, prompt
-- **Primary metrics:** RAGAS faithfulness and answer_relevancy, abstention accuracy
-- **Secondary:** `C14-prompt-permissive` isolates how much grounding comes from the prompt
-  rather than the model — run it before concluding anything about fine-tuning
-- **Report training cost:** hours, VRAM peak, dataset size. RQ3's actual question for an
-  SME is not "does it help" but "does it help enough to be worth this".
+Fine-tuning was dropped (docs/09, 2026-10-14); no adapter is trained. RQ3 is reframed to the
+generation question the existing harness answers directly: which model size and prompt should
+serve the chatbot.
+
+- **Configs:** a 2×2 — C0 (3B, `strict_grounded`) vs `C-gen-8b-strict`, `C-gen-3b-permissive`,
+  `C-gen-8b-permissive` (model ∈ {`llama3.2` 3B, `llama3.1:8b`} × prompt ∈ {strict, permissive})
+- **Held constant:** retrieval, chunking, corpus, and the index — generation is not in
+  `index_key`, so all four cells read one shared index with no re-ingest
+- **Primary metrics:** grounding (fact containment, the interim RAGAS stand-in, §5.1), refusal
+  accuracy split by cause
+- **Report:** latency per model size — the real UX cost of the larger model on a live chat surface
 
 ### RQ4 — generalisation
 

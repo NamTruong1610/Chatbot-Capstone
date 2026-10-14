@@ -137,9 +137,8 @@ absence rather than retrieval architecture.
 
 | Key | Type | Default | Arms |
 |---|---|---|---|
-| **`model`** | str | `llama3.2` *(provisional — OD-3)* | base · fine-tuned |
+| **`model`** | str | `llama3.2` *(provisional — OD-3)* | `llama3.2` (3B) · `llama3.1:8b` |
 | `base_url` | str | `http://localhost:11434/v1` | — |
-| **`adapter`** | str | null | null · QLoRA adapter path |
 | **`prompt_variant`** | enum | `strict_grounded` | `strict_grounded` · `permissive` |
 | `temperature` | float | 0.0 | — |
 | `max_tokens` | int | 512 | — |
@@ -230,12 +229,18 @@ Fifteen named configurations. Each isolates **one** manipulation from the baseli
 | `C11-acl-postfilter` | `access_control.strategy: postfilter` | ARBITER-style comparison (Lorenzo et al., 2025) |
 | `C12-acl-none` | `access_control.strategy: none` | Control: establishes the leakage ceiling. **Harness-only** |
 
-### RQ3 — fine-tuning
+### RQ3 — generation (model size × prompt strictness)
+
+Fine-tuning was dropped (docs/09, 2026-10-14); no QLoRA adapter is trained. RQ3 instead compares
+generation configurations on the existing index — no re-ingest, since generation is not part of
+`index_key`. The arms form a 2×2 of model size × prompt strictness; C0-baseline occupies the
+(3B, `strict_grounded`) cell.
 
 | ID | Manipulation | Notes |
 |---|---|---|
-| `C13-finetuned` | `generation.adapter: <qlora path>` | Best RQ1 config + tuned generator |
-| `C14-prompt-permissive` | `generation.prompt_variant: permissive` | Isolates how much of the grounding comes from prompting vs. retrieval |
+| `C-gen-8b-strict` | `generation.model: llama3.1:8b` | 8B under the strict prompt |
+| `C-gen-3b-permissive` | `generation.prompt_variant: permissive` | 3B, prompt control (no abstention instruction) |
+| `C-gen-8b-permissive` | `generation.model: llama3.1:8b` + `generation.prompt_variant: permissive` | 8B, prompt control |
 
 ### RQ4 — generalisation
 

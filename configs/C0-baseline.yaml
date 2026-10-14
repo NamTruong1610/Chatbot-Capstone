@@ -78,7 +78,6 @@ overrides:
     # sweep exists (CLAUDE.md rule 8).
     model: llama3.2
     base_url: http://localhost:11434/v1
-    adapter: null
     prompt_variant: strict_grounded
     temperature: 0.0
     max_tokens: 512

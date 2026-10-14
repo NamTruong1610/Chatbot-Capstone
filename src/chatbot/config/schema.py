@@ -284,7 +284,6 @@ class GenerationConfig(_Section):
     # sweep (CLAUDE.md rule 8, "binds from the first recorded result").
     model: str = "llama3.2"
     base_url: str = "http://localhost:11434/v1"
-    adapter: str | None = None
     prompt_variant: PromptVariant = PromptVariant.strict_grounded
     temperature: Annotated[float, Field(ge=0.0, le=2.0)] = 0.0
     max_tokens: Annotated[int, Field(ge=1)] = 512
