@@ -29,7 +29,7 @@ the repo, because it is what keeps the configuration matrix honest: a reader of
 ├── configs/
 │   ├── C0-baseline.yaml           # the root config — see CLAUDE.md rule 8
 │   ├── C1-hybrid.yaml
-│   ├── ...                        # C2..C14, one manipulation each
+│   ├── ...                        # C2..C9, C-gen-*, one manipulation each
 │   └── sweeps/
 │       ├── rq1.yaml               # ordered list of config ids
 │       ├── rq2.yaml
@@ -101,8 +101,7 @@ the repo, because it is what keeps the configuration matrix honest: a reader of
 │       └── report.py              # grouped summaries, tables
 │
 ├── scripts/
-│   ├── build_testset.py           # scaffold Q&A pairs from a crawl for manual editing
-│   └── finetune_qlora.py          # RQ3
+│   └── build_testset.py           # scaffold Q&A pairs from a crawl for manual editing
 │
 ├── data/                          # gitignored except .gitkeep
 │   ├── corpora/<domain_id>/       # raw crawl JSON — never regenerate, never edit

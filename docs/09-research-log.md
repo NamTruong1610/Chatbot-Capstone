@@ -31,9 +31,9 @@ unaffected (it hashes chunking + embedding only), so no re-ingest is required.
 matrix (docs/03 §RQ3), the evaluation protocol (docs/06 §RQ3), and the CLAUDE.md RQ-table row
 were updated for consistency. Historical records of the original fine-tuning intent (this log's
 2026-10-11 reframe entry, OD-3's analysis) are kept as-is; the 2026-10-11 entry now carries its
-2026-10-14 resolution. Planning/architecture mentions that merely name the never-built QLoRA
-task (docs/01 scope note, docs/04 tree's `finetune_qlora.py`, docs/07 P5-7) are left for a
-follow-up tidy.
+2026-10-14 resolution. Planning/architecture mentions of the never-built QLoRA task (docs/01
+scope note and compute constraint, docs/04 tree's `finetune_qlora.py` and the `C2..C14` range,
+docs/07 P5-1/P5-7/P5-8 and the QLoRA risk row) were tidied in the same change for consistency.
 
 ---
 

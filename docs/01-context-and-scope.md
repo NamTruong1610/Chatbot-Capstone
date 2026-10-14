@@ -48,7 +48,7 @@ implementation detail. See `FR-CRAWL-*`, `FR-WF-*`, `FR-CHUNK-*`.
 
 | Constraint | Value | Consequence |
 |---|---|---|
-| Compute | One consumer-grade machine, ≤16GB VRAM | 7B models max, QLoRA not full fine-tune, no cluster |
+| Compute | One consumer-grade machine, ≤16GB VRAM | 7B models max, local inference only, no cluster |
 | Timeline | 13 weeks, 27 Jul – 23 Oct 2026 | Scope ruthlessly; see `docs/07-build-plan.md` |
 | Test set size | 30–50 Q&A pairs per domain | Underpowered for full factorial — see §6 below |
 | Corpus | Public web content, 2 SME domains, distinct industries | Scraping permission required per domain |
@@ -99,7 +99,6 @@ Consequences that must shape the harness:
 - Evaluation harness producing per-configuration comparison tables
 - Two-domain corpus + golden test sets
 - Embeddable frontend widget sufficient to demonstrate integration
-- QLoRA fine-tuning for RQ3
 
 **Out of scope**
 - Production hardening, autoscaling, multi-region, SLAs
