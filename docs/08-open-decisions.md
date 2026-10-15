@@ -635,3 +635,59 @@ just the static file corpus — generalising RQ2 access isolation across busines
 **Cosmetic, accepted:** the fingerprint and business-registry `chunk_count` are not updated on a
 private append (the fingerprint guard only checks `chunking_hash`/`embedding_model`, unchanged);
 the count undercounts private additions. Not worth a write on this path.
+
+---
+
+## OD-20 — Superlative / aggregation queries are unreliable (several independent failure modes)
+
+**Status:** ☐ Open (known limitation) · **Surfaced + diagnosed:** 2026-10-15, demo testing on Wyatt
+
+A "cheapest / most expensive / longest / how many in total / list all X" question needs the system
+to compare **every** candidate, but RAG has no single chunk that answers "cheapest" — the result
+depends on which fee chunks happen to rank and on how the LLM reasons over them. On this corpus the
+query class failed through **three independent mechanisms**, none fixed by a bigger model or a
+larger `top_k`. Evidence is from the stored conversation turns (`search_query` is the string
+actually sent to retrieval after any rewrite):
+
+1. **Phrasing-sensitive retrieval, even single-shot (no history).** A genuinely fresh turn asking
+   *"cheapest course **you offer** for international students"* (`search_query` verbatim — no
+   rewrite) returned "Diploma of Business" ($11,500) with **no tiling page in `sources`** — wrong.
+   Yet near-identical phrasings *"cheapest course **for** international students"* (via `chat-eval`
+   and a direct no-`session_id` API call) returned the correct "Certificate III Tiling, $10,500".
+   A few tokens of wording flip the retrieved set and the answer.
+
+2. **The query-rewrite mangles comparative follow-ups (multi-turn).** In a conversation where the
+   prior turn answered *"cheapest course overall → Diploma of Business"* (Business genuinely is
+   cheapest for *domestic*), the follow-up *"cheapest course for international students"* was
+   rewritten by the condense step (`generation/rewrite.py`, which runs only when history is
+   present) into **`search_query: "How much is the Diploma of Business?"`** — the comparative
+   intent was discarded and retrieval/answer collapsed onto Business. (This is history-driven, so
+   it never touches the single-shot RQ eval numbers, which pass `history=None`.)
+
+3. **Model variance.** Single-shot with no history, `C-gen-8b-strict` (8B) answered wrongly by
+   hallucinating a non-existent constraint ("the tiling course is not available to international
+   students") where 3B answered correctly. *n = 1* — not a model ranking (8B is better across the
+   full RQ3 set); the point is that the query class is unstable.
+
+All three score **`grounded`** by containment (a course name + a fee are present), so each is a
+clean §6 instance: the automatic signal is satisfied while the answer is wrong.
+
+**Not retrieval-recall / not `top_k`.** A `C-demo-topk` (`top_k: 12`) config was built on an early
+recall hypothesis and **discarded**: traces show the relevant chunk is already retrieved under the
+working phrasings, and raising `top_k` does not address phrasing-sensitivity, the rewrite, or model
+variance. The frontend session handling is also **not** at fault — it mints a fresh `session_id`
+per new conversation and does not auto-resume; mechanism 2 appears only when a follow-up is asked
+*within the same conversation* (standard chat behaviour), which is exactly what happened.
+
+**Fix / future work.** The robust answer is **query-type routing**: detect a superlative/aggregation
+intent and answer it from a structured min/max/count over the fee/attribute fields rather than from
+the LLM's reasoning over retrieved rows. A secondary improvement is making the rewrite faithful for
+comparative follow-ups (it should keep "cheapest … for international students" standalone rather
+than specialising it to the prior answer) — an experimental change in `rewrite.py`/the rewrite
+prompt. Both are out of scope for the current RQs; recorded as future work and a reportable
+limitation (§5/§6). C0-baseline untouched throughout.
+
+*(Diagnosis history, for the record: initially mis-read as a retrieval-recall miss, then as a
+generation-only failure, then as purely history-driven; the conversation-turn traces show it is all
+three of the mechanisms above. Kept as a cautionary example of why single hypotheses were verified
+against isolating tests before being trusted.)*
