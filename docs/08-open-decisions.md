@@ -638,47 +638,56 @@ the count undercounts private additions. Not worth a write on this path.
 
 ---
 
-## OD-20 — Comparative follow-ups mis-anchored by conversation history; superlative queries also model-fragile
+## OD-20 — Superlative / aggregation queries are unreliable (several independent failure modes)
 
-**Status:** ☐ Open (known limitation) · **Surfaced:** 2026-10-15, demo testing on Wyatt · **Diagnosed:** isolated to conversation history
+**Status:** ☐ Open (known limitation) · **Surfaced + diagnosed:** 2026-10-15, demo testing on Wyatt
 
-**Observed.** In the running app, *"cheapest course for international students"* answered "Diploma
-of Business" ($11,250 international tuition) when the Certificate III in Wall and Floor Tiling
-($10,500 total / $9,000 tuition) is cheaper.
+A "cheapest / most expensive / longest / how many in total / list all X" question needs the system
+to compare **every** candidate, but RAG has no single chunk that answers "cheapest" — the result
+depends on which fee chunks happen to rank and on how the LLM reasons over them. On this corpus the
+query class failed through **three independent mechanisms**, none fixed by a bigger model or a
+larger `top_k`. Evidence is from the stored conversation turns (`search_query` is the string
+actually sent to retrieval after any rewrite):
 
-**Root cause — conversation history, not retrieval and not model size.** Three isolating tests
-pin it down:
+1. **Phrasing-sensitive retrieval, even single-shot (no history).** A genuinely fresh turn asking
+   *"cheapest course **you offer** for international students"* (`search_query` verbatim — no
+   rewrite) returned "Diploma of Business" ($11,500) with **no tiling page in `sources`** — wrong.
+   Yet near-identical phrasings *"cheapest course **for** international students"* (via `chat-eval`
+   and a direct no-`session_id` API call) returned the correct "Certificate III Tiling, $10,500".
+   A few tokens of wording flip the retrieved set and the answer.
 
-- `config query` shows the tiling fee chunk retrieved at **rank 4 within the top 5**, so retrieval
-  was never the problem. (A `C-demo-topk` `top_k: 12` experiment confirmed top-5 and top-12 return
-  the identical chunk; it was discarded along with its incorrect retrieval-recall diagnosis.)
-- A single-shot `chat-eval` (3B) **answers correctly** ("Certificate III Tiling, $10,500", HIT).
-- A direct `POST /api/chat/message` with **no `session_id`** (hence no history) **also answers
-  correctly**, with the tiling page in `sources`.
+2. **The query-rewrite mangles comparative follow-ups (multi-turn).** In a conversation where the
+   prior turn answered *"cheapest course overall → Diploma of Business"* (Business genuinely is
+   cheapest for *domestic*), the follow-up *"cheapest course for international students"* was
+   rewritten by the condense step (`generation/rewrite.py`, which runs only when history is
+   present) into **`search_query: "How much is the Diploma of Business?"`** — the comparative
+   intent was discarded and retrieval/answer collapsed onto Business. (This is history-driven, so
+   it never touches the single-shot RQ eval numbers, which pass `history=None`.)
 
-The wrong answer appears **only through the app with conversation history**. The chat endpoint
-loads a resumed session's prior turns and feeds them to the pipeline; the query-rewrite step
-(`generation/rewrite.py`, which runs *only* when history is present) and the generator's history
-then anchor the comparative follow-up to the **previous turn's answer** — here an earlier
-*"cheapest course overall → Diploma of Business"* exchange (Business genuinely is cheapest for
-*domestic* students). The frontend had reused the session, so a "new chat" in the UI was not a new
-backend session. This is a real multi-turn-RAG limitation (comparative-follow-up anchoring), plus
-a likely **frontend bug**: a new conversation should start a fresh `session_id`.
+3. **Model variance.** Single-shot with no history, `C-gen-8b-strict` (8B) answered wrongly by
+   hallucinating a non-existent constraint ("the tiling course is not available to international
+   students") where 3B answered correctly. *n = 1* — not a model ranking (8B is better across the
+   full RQ3 set); the point is that the query class is unstable.
 
-**Secondary finding — aggregation is model-fragile even single-shot.** On the same question with
-no history, `C-gen-8b-strict` (8B) answered **wrongly**, hallucinating a non-existent constraint
-("the tiling course is not available to international students") and falling back to Business,
-while 3B answered correctly. A bigger model is **not** a reliable fix for superlative/aggregation
-queries. This is *n = 1* — do not read a model ranking into it (8B is better across the full RQ3
-set); the point is instability.
+All three score **`grounded`** by containment (a course name + a fee are present), so each is a
+clean §6 instance: the automatic signal is satisfied while the answer is wrong.
 
-**Both failures score `grounded` by containment** (a course name + a fee present), so both are
-clean §6 instances: the automatic signal is satisfied while the answer is wrong.
+**Not retrieval-recall / not `top_k`.** A `C-demo-topk` (`top_k: 12`) config was built on an early
+recall hypothesis and **discarded**: traces show the relevant chunk is already retrieved under the
+working phrasings, and raising `top_k` does not address phrasing-sensitivity, the rewrite, or model
+variance. The frontend session handling is also **not** at fault — it mints a fresh `session_id`
+per new conversation and does not auto-resume; mechanism 2 appears only when a follow-up is asked
+*within the same conversation* (standard chat behaviour), which is exactly what happened.
 
-**Fixes / future work.** (1) *Multi-turn:* verify the frontend opens a genuinely new `session_id`
-for a new conversation, and treat comparative-follow-up anchoring as a known rewrite-step
-limitation. (2) *Aggregation:* the robust fix is **query-type routing** — detect a
-superlative/aggregation intent and answer it from a structured min/max/count over the fee/attribute
-fields rather than the LLM's arithmetic over retrieved rows. A new component, out of scope for the
-current RQs; recorded as future work and a reportable limitation (§5/§6). C0-baseline untouched
-throughout.
+**Fix / future work.** The robust answer is **query-type routing**: detect a superlative/aggregation
+intent and answer it from a structured min/max/count over the fee/attribute fields rather than from
+the LLM's reasoning over retrieved rows. A secondary improvement is making the rewrite faithful for
+comparative follow-ups (it should keep "cheapest … for international students" standalone rather
+than specialising it to the prior answer) — an experimental change in `rewrite.py`/the rewrite
+prompt. Both are out of scope for the current RQs; recorded as future work and a reportable
+limitation (§5/§6). C0-baseline untouched throughout.
+
+*(Diagnosis history, for the record: initially mis-read as a retrieval-recall miss, then as a
+generation-only failure, then as purely history-driven; the conversation-turn traces show it is all
+three of the mechanisms above. Kept as a cautionary example of why single hypotheses were verified
+against isolating tests before being trusted.)*
