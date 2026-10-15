@@ -635,3 +635,40 @@ just the static file corpus — generalising RQ2 access isolation across busines
 **Cosmetic, accepted:** the fingerprint and business-registry `chunk_count` are not updated on a
 private append (the fingerprint guard only checks `chunking_hash`/`embedding_model`, unchanged);
 the count undercounts private additions. Not worth a write on this path.
+
+---
+
+## OD-20 — Aggregation / superlative queries fail at the generation step, not retrieval
+
+**Status:** ☐ Open (known limitation) · **Surfaced:** 2026-10-15, demo testing on Wyatt
+
+A "cheapest / most expensive / longest / how many in total / list all X" question needs the
+system to compare **every** candidate. RAG handles this poorly — but, measured on this corpus,
+the failure is at **generation**, not retrieval.
+
+**What was observed.** Asked *"cheapest course for international students"*, the chatbot answered
+"Diploma of Business" ($11,250 international tuition) when the Certificate III in Wall and Floor
+Tiling ($9,000 international tuition) is cheaper. A retrieval trace (`config query`) shows the
+tiling fee chunk retrieved at **rank 4 within the top 5** — i.e. the generator already had both
+figures in context (Business at rank 2, tiling at rank 4) and still failed to pick the minimum.
+It most likely anchored on the Business "how much does it cost" chunk and/or carried over the
+*domestic* answer, where Business genuinely is the cheapest. The containment metric scores this
+answer **grounded** (it contains a course name and a fee), so it is a clean, strengthened
+instance of the §6 point: the automatic signal is satisfied while the answer is wrong, and here
+the correct data was in front of the model.
+
+**A `top_k` change does NOT fix it (and was discarded).** A `C-demo-topk` config (`top_k: 12`)
+was tried on the hypothesis that the cheaper chunk was below the top-5 cutoff. The retrieval
+traces disproved it: top-5 and top-12 return the identical relevant chunk, because tiling is
+already at rank 4. Raising `top_k` cannot fix a failure the generator makes with the data in
+hand. The config and that (incorrect) retrieval-recall diagnosis were dropped.
+
+**What might help, and the sound fix.** A stronger generator (`llama3.1:8b`) may reason over the
+fee rows correctly — worth checking, and RQ3-adjacent, but not a guarantee and not the general
+answer. A prompt that explicitly instructs a min/max comparison could help at some cost to other
+behaviour (a `prompt_variant` change, hence an experimental choice, not a silent edit). The sound
+fix is **query-type routing**: detect an aggregation/superlative intent and answer it from a
+structured min/max/count over the fee (or attribute) fields rather than from the LLM's arithmetic
+over retrieved rows. That is a new component, out of scope for the current RQs — recorded here as
+future work and a reportable limitation (§5/§6), not built now. C0-baseline was untouched
+throughout.
