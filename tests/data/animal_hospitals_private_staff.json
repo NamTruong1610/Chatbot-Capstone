@@ -1,0 +1,115 @@
+[
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/staff-pet-discount",
+  "title": "Staff Pet Care Discount Policy (Internal)",
+  "access_level": "private",
+  "text": "Staff Pet Care Discount Policy. Permanent team members receive a 38% discount on consultations, vaccinations and procedures for up to three registered personal pets. Casual team members become eligible for a 15% discount after completing a 90-day probation period. All staff discounts must be approved by the hospital Practice Manager and recorded against the internal discount code SAH-STF-3392 in the practice management system. Staff discounts cannot be combined with LifeVAC or any other promotion.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Staff Pet Care Discount Policy"
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/s8-controlled-drugs",
+  "title": "Schedule 8 Controlled Drug Handling Procedure (Confidential)",
+  "access_level": "private",
+  "text": "Schedule 8 Controlled Drug Handling Procedure. Schedule 8 drugs are stored in the locked S8 safe and may only be removed by a veterinarian, with a second staff member witnessing the register entry. The S8 safe combination is changed on the first Monday of every month by the Superintendent Veterinarian. Any S8 register discrepancy must be reported within 4 hours to the Group Clinical Governance Lead, Dr Priya Ramasamy-Hale, using incident form CG-14.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Schedule 8 Controlled Drug Handling Procedure"
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/inter-hospital-ct-referral",
+  "title": "Inter-Hospital CT Referral Procedure (Internal Only)",
+  "access_level": "private",
+  "text": "Inter-Hospital CT Referral Procedure. Patients from other SAH hospitals who need a CT scan are referred to the Kellyville CT scanner using the internal booking code CT-KV-5168. Inter-hospital CT slots are held on Tuesday and Friday mornings. The referring hospital is charged an internal recharge of $245 per scan, which must not be shown on client invoices.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Inter-Hospital CT Referral Procedure"
+   }
+  ],
+  "tables": [
+   {
+    "caption": "Inter-Hospital CT Referral",
+    "headers": [
+     "Booking Code",
+     "Slots",
+     "Internal Recharge"
+    ],
+    "rows": [
+     [
+      "CT-KV-5168",
+      "Tuesday and Friday mornings",
+      "$245 per scan"
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/write-off-authority",
+  "title": "Invoice Write-Off and Deposit Authority (Private)",
+  "access_level": "private",
+  "text": "Invoice Write-Off and Deposit Authority. Reception and nursing staff may not discount or write off invoices. Veterinarians may write off up to $420 per invoice, and Practice Managers may write off up to $2,750 per invoice. Anything above $2,750 requires sign-off from Regional Operations. Hospitalised patients require a deposit of 60% of the high estimate before admission, except emergencies triaged as life-threatening.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Invoice Write-Off and Deposit Authority"
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/on-call-roster",
+  "title": "On-Call Veterinarian Roster Procedure (Internal)",
+  "access_level": "private",
+  "text": "On-Call Veterinarian Roster Procedure. The rostered on-call veterinarian carries the group duty phone, 0417 382 906, from close of business until the morning handover. Staff should never give the duty phone number to clients. The on-call veterinarian is paid an on-call allowance of $68 per night, plus call-out hours at the overtime rate. Handover to the day team happens at 7:45am in the Newtown treatment room.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "On-Call Veterinarian Roster Procedure"
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/pharmacy-ordering",
+  "title": "Pharmacy and Consumables Ordering Procedure (Confidential)",
+  "access_level": "private",
+  "text": "Pharmacy and Consumables Ordering Procedure. All pharmacy orders are placed on the group wholesaler account, account number VW-AC-88214. The standing weekly order closes at 2pm every Wednesday. Any single order above $3,600 requires Practice Manager approval before it is submitted to the wholesaler.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Pharmacy and Consumables Ordering Procedure"
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/morbidity-review",
+  "title": "Clinical Morbidity and Mortality Review Procedure (Internal Only)",
+  "access_level": "private",
+  "text": "Clinical Morbidity and Mortality Review Procedure. Any patient death or serious complication under general anaesthetic must be logged within 24 hours under the case reference prefix MRP-2291 and referred to the Morbidity Review Panel. The panel meets on the second Tuesday of each month to review logged cases and agree on protocol changes. Findings are confidential and must not be discussed with clients.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Clinical Morbidity and Mortality Review Procedure"
+   }
+  ]
+ },
+ {
+  "url": "https://www.sydneyanimalhospitals.com.au/staff-portal/leave-blackout",
+  "title": "Staff Annual Leave Blackout Policy (Private)",
+  "access_level": "private",
+  "text": "Staff Annual Leave Blackout Policy. Annual leave is not approved during the peak holiday blackout period from 15 December to 10 January, when boarding and emergency caseloads are highest. Exceptions require Regional Operations approval and are recorded under leave code LV-BLK-7704. Outside the blackout, leave requests need at least 28 days notice.",
+  "headings": [
+   {
+    "level": 1,
+    "text": "Staff Annual Leave Blackout Policy"
+   }
+  ]
+ }
+]
