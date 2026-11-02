@@ -691,3 +691,61 @@ limitation (§5/§6). C0-baseline untouched throughout.
 generation-only failure, then as purely history-driven; the conversation-turn traces show it is all
 three of the mechanisms above. Kept as a cautionary example of why single hypotheses were verified
 against isolating tests before being trusted.)*
+
+---
+
+## OD-21 — RQ4 cross-domain comparison is reported per `question_type`, headline on `factual_lookup`
+
+**Status:** ☑ Decided (researcher, 2026-11-02) — confirm with supervisor · **Decider:** supervisor
+· **Blocks:** RQ4 Table D.1 and its discussion
+
+**Question.** Adding `animal-hospitals` as a third domain exposed that the domains' test sets
+share a `question_type` vocabulary but not a mix. An aggregate score is a weighted average over
+types of very different difficulty, so a cross-domain aggregate partly measures the test-set mix
+rather than the domain.
+
+| Domain (C0 run) | factual_lookup | multi_chunk | out_of_scope |
+|---|---|---|---|
+| `wyatt-edu` (`20260731T095113`, as scored) | 17 | 1 | 3 |
+| `austral-mfg` (`20260814T092155`, as scored) | 17 | 1 | 3 |
+| `animal-hospitals` (`20261102T035347`) | 65 | 15 | 12 |
+
+(The Wyatt and Austral counts are the test-set versions those runs actually scored; both CSVs
+were later edited by reclassifying out_of_scope rows — see docs/09 2026-08-14.)
+
+**Options.** (a) aggregate only; (b) rebalance the new set to match the old mix (throws away
+validated cases); (c) report per `question_type`, headline on the one type every domain samples
+adequately.
+
+**Decision: (c).** Table D.1 reports each metric per `question_type`; the **headline
+cross-domain comparison is `factual_lookup` only** (n = 17 / 17 / 65). `multi_chunk` is reported
+for animal-hospitals but **not compared** across domains — Wyatt and Austral have n = 1, which is
+an anecdote, not a rate. The aggregate is still shown, labelled as mix-dependent. `out_of_scope`
+is scored by abstention in generation, not retrieval, so it does not appear in retrieval rows.
+
+**Validity notes for the write-up.**
+- C0's retrieval section and `index_key` (`8dd9cd35699dbbce`) are identical across all three
+  runs; the `config_hash` differs (OD-15 staff role and later non-retrieval config changes), and
+  the runs span git SHAs `a8171016` / `1ac1493c` / `f39a22bd`. No retrieval code change between
+  them is known, but the columns were not re-run at one SHA.
+- Workflow extraction at ingest is LLM-driven and **not reproducible**: the animal-hospitals index
+  had 52 workflow chunks before the 2026-11-02 re-ingest and 4 after (same config, temp 0;
+  malformed-JSON discards vary). Workflow chunks were measured inert on Wyatt (docs/09
+  2026-10-13), so retrieval rows are not expected to depend on this, but it is a determinism gap
+  (CLAUDE.md rule 3) worth a sentence in threats to validity.
+- Optional strengthening, not done: re-run C0 on all three domains at one SHA with the current
+  test-set versions, to remove the SHA/version caveats.
+- **RQ3 out-of-scope verdicts on animal-hospitals were checked by hand** (all 12 cases × 4
+  configs, 2026-11-02). The reported true-refusal counts are the manual reading; the harness's
+  substring abstention detector is reported alongside, not replaced (docs/09 2026-11-02).
+- **Reproducibility example (generation).** Wyatt's ATAR out-of-scope case under
+  `C-gen-3b-permissive`: run `20261011T234423` (config hash `fc4375bb8935`, SHA `846e6aaa`)
+  fabricated *"ATAR requirements … range from 60 to 90"*; runs `20261025T020726` and
+  `20261102T060908` (hash `e38075d6904f`, SHAs `765b63a3` / `f39a22bd`) decline. Same config hash,
+  no code change (`765b63a`→`f39a22b` adds test data/scripts only) reproduced **21/21**
+  byte-identical Wyatt answers, so generation is deterministic given fixed code + config + index.
+  Across `846e6aaa`→now, only **17/21** answers match for each permissive config — so something in
+  that window changed generation output, contrary to docs/09 2026-10-14's "byte-identical"
+  statement for the hash change. The cause (code changes in that window, the Wyatt index state, or
+  the `generation.adapter` removal itself) is not isolated. The earlier fabrication is superseded;
+  only results under the current hash are reported.

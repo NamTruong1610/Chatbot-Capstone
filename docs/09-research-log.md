@@ -8,6 +8,100 @@ with a new one.
 
 ---
 
+## 2026-11-02 — Third domain (Sydney Animal Hospitals): RQ1 rerank holds, isolation holds, permissive "0.0 refusal" is a detector artefact (MEASURED)
+
+**What was added.** `animal-hospitals` (Sydney Animal Hospitals, 40 crawled pages) as a third
+evaluation domain, with 109 hand-authored cases: `animal_hospitals_rq.csv` (92 — 65
+factual_lookup, 15 multi_chunk, 12 out_of_scope) and `animal_hospitals_access.csv` (17 — 15
+private tracer questions over 8 fictional staff docs + 2 public controls). Ground truth was taken
+from the local crawl `crawl_20261029T105156.json`, never the live site; `scripts/verify.py`
+checked every `answer_terms` string is literally in a chunk of its `source_page`, that each row's
+components co-occur in one chunk (the answer-span rule), and that no private tracer occurs in the
+public corpus. No reasoning cases, to keep the `question_type` vocabulary identical to Wyatt and
+Austral (RQ4).
+
+**Apparatus.** One C0 ingest with `--private-corpus tests/data/animal_hospitals_private_staff.json`
+serves every RQ: `index_key 8dd9cd35699dbbce`, 1,262 chunks (1,244 public prose, 14 private, 4
+workflow). All runs at git SHA `f39a22bd`, temperature 0.0, append-only in `results/`.
+
+**RQ1 — rerank wins again; hybrid alone does *not* regress here.** k=5, 80 retrieval-scored, 79
+answer-scored.
+
+| config | hit_rate | recall | MRR | answer-hit | latency mean / median |
+|---|---|---|---|---|---|
+| C0 dense | 0.950 | 0.879 | 0.885 | 0.797 | 49.1 / 12.6 ms |
+| C1 hybrid | 0.975 | 0.931 | 0.872 | 0.848 | 33.2 / 17.5 ms |
+| C2 hybrid+rerank | 0.988 | 0.927 | 0.923 | **0.949** | 111.9 / 102.7 ms |
+
+C2 is best on answer-hit, at ~8× C0's median latency — the same accuracy-for-latency trade as
+Wyatt. Unlike Wyatt (where C1 fell 0.706→0.588), C1 *improved* answer-hit here (0.797→0.848).
+That is consistent with Wyatt's hybrid regression being table-driven, but it is one more domain
+and C1 was not run on Austral, so it is not a confirmation.
+
+**RQ2 — isolation holds on a third domain.** Run `20261102T035633-C0-baseline-acl`:
+`customer_leaked_chunks = 0`, `tracer_leaks_in_customer_answer = 0` (isolation PASS); staff access
+**15/15**; public controls answered by both roles **2/2**. Customers abstained on **11/15** private
+questions by the automatic detector; the other 4 (cases 7, 8, 12, 14) contained no tracer — two
+are long-form "not in the context" declines, two are wrong answers (case 12 gives a prefix "B"; case 14 offers the site's promotion months as
+leave blackouts). So
+the refusal side of RQ2 is imperfect even where isolation is perfect.
+
+**RQ3 — automatic vs manual refusal.** 92 cases per config; grounding-containment is over the
+answerable cases the model did not abstain on (79 with answer terms minus false abstentions).
+
+| config | refusal (auto) | refusal (manual) | grounding-containment | false abstentions |
+|---|---|---|---|---|
+| C0 (3B strict) | 9/12 = 0.750 | **12/12** | 50/74 = 0.676 | 5/80 |
+| C-gen-8b-strict | 12/12 = 1.000 | **12/12** | 51/64 = 0.797 | 15/80 |
+| C-gen-3b-permissive | 0/12 = 0.000 | **12/12** | 52/79 = 0.658 | 0/80 |
+| C-gen-8b-permissive | 0/12 = 0.000 | **12/12** | 54/79 = 0.684 | 0/80 |
+
+Manual reading of all 12 out-of-scope answers × 4 configs: **every config declines every
+out-of-scope question in substance, and none states the fact asked for** (no invented price,
+hour, founder or service). The automatic misses are long-form declines the substring detector
+does not recognise — C0 cases 84/85/88, and all 24 permissive answers, which never use the strict
+refusal string. So permissive's **0.0 is a detector artefact, not a refusal collapse.** What the
+prompt variant does change: (1) *detectability* — strict refusals are machine-recognisable,
+permissive ones are not; (2) *faithfulness of the decline* — several declines add speculation or
+unrequested detail: 3B-permissive 84 (cost "may be included" in a check-up), 89 (generic claim
+about donor programs), 90 (infers they do surgery "on animals in general"), 91 ("Itchy Ear LifeVAC"
+offered as eye care), 86 (misattributes the preschool contacts and number); 8B-permissive 80
+("unlikely they treat reptiles"), 82 ("can only assume … morning to evening"), 83 ("implies …
+end-of-life care"), 85 (lists Newport as (02) 9519 4111 — the crawl's own template error), 91
+("might imply … eye problems"); and, under strict, C0 84 (cost "comparable to vaccinations");
+(3) *over-refusal* — 8B strict pays for its clean refusals with 15/80 false abstentions. The
+prompt choice is therefore a trade-off among those three, not refusal vs hallucination.
+
+**Wyatt cross-check (OD-21).** Re-run under the committed configs (`20261102T060908`,
+`20261102T061321`), both permissive configs decline Wyatt's ATAR case. An earlier 3B permissive
+run (`20261011T234423`, superseded hash `fc4375bb8935`) had fabricated "ATAR … 60 to 90". Same
+hash and code reproduced 21/21 byte-identical Wyatt answers; the earlier window did not (17/21),
+cause not isolated — recorded in OD-21.
+
+**RQ4 — per question_type, headline factual_lookup (OD-21).** C0, from stored rows (Wyatt
+`20260731T095113`, Austral `20260814T092155`) and this run:
+
+| factual_lookup | Wyatt (n=17) | Austral (n=17) | Animal hospitals (n=65) |
+|---|---|---|---|
+| hit_rate@5 | 0.824 | 1.000 | 0.938 |
+| recall@5 | 0.676 | 1.000 | 0.900 |
+| MRR | 0.647 | 0.941 | 0.871 |
+| answer-hit@5 | 0.750 (n=16) | 0.882 | 0.815 |
+
+The vet domain sits between table-heavy Wyatt and prose-only Austral on every metric — it is
+mostly prose with repeated location widgets and some crawl noise. Its `multi_chunk` (n=15: hit
+1.000, recall 0.789, MRR 0.947, answer-hit 0.714) is reported but not compared (Wyatt/Austral
+n=1).
+
+**Validity.** Wyatt/Austral RQ4 columns come from older SHAs and test-set versions (identical
+retrieval config and `index_key`). Workflow extraction at ingest is non-deterministic (52 → 4
+workflow chunks across two ingests of the same crawl); over a fixed index, generation reproduced
+(21/21 byte-identical Wyatt answers at the same config hash).
+The manual refusal counts are a researcher reading, reported next to the automatic ones
+(dual-track), not substituted for them in results files.
+
+---
+
 ## 2026-10-14 — Fine-tuning formally dropped; `generation.adapter` removed; RQ3 stays the model×prompt study
 
 **Decision.** Fine-tuning is off the table for this project. No QLoRA adapter was ever trained
