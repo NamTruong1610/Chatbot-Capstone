@@ -55,7 +55,8 @@ components from a configuration's output is a validity failure** — it manufact
 **Components** (`answer_terms`, docs/05 §2): `;`-separated components, each `|`-separated
 alternatives. Answer-relevant iff **every** component has **≥1** alternative present (AND
 across components, OR within a component). The `|` absorbs genuine source variance/conflicts
-(a fee stated `$11,500` on the table and `$11,250` in a breakdown) so the matcher records no
+(the Diploma of Business stated as `50 weeks` on its course page and `52 weeks` in the courses
+table) so the matcher records no
 false miss where the source itself differs.
 
 **Matching:** casefold + collapse whitespace, then substring. Deliberately literal — no

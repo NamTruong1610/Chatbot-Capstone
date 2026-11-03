@@ -706,35 +706,46 @@ rather than the domain.
 
 | Domain (C0 run) | factual_lookup | multi_chunk | out_of_scope |
 |---|---|---|---|
-| `wyatt-edu` (`20260731T095113`, as scored) | 17 | 1 | 3 |
-| `austral-mfg` (`20260814T092155`, as scored) | 17 | 1 | 3 |
+| `wyatt-edu` (`20261102T072838`) | 66 | 19 | 15 |
+| `austral-mfg` (`20261102T072919`) | 59 | 9 | 12 |
 | `animal-hospitals` (`20261102T035347`) | 65 | 15 | 12 |
 
-(The Wyatt and Austral counts are the test-set versions those runs actually scored; both CSVs
-were later edited by reclassifying out_of_scope rows — see docs/09 2026-08-14.)
+(Updated 2026-11-02 for the expanded sets on `feature/expand-wyatt-austral`: `wyatt_rq1.csv`
+21 → 100, `austral_rq4.csv` 21 → 80, ground truth from the scored crawls `crawl_20260725…` and
+checked by `scripts/verify.py`, original rows' gold audited by hand. The superseded 21-case runs
+`20260731T095113` / `20260814T092155` scored 17 / 1 / 3 each. Austral is capped at 80 by its
+7-page site, not padded.)
 
 **Options.** (a) aggregate only; (b) rebalance the new set to match the old mix (throws away
 validated cases); (c) report per `question_type`, headline on the one type every domain samples
 adequately.
 
 **Decision: (c).** Table D.1 reports each metric per `question_type`; the **headline
-cross-domain comparison is `factual_lookup` only** (n = 17 / 17 / 65). `multi_chunk` is reported
-for animal-hospitals but **not compared** across domains — Wyatt and Austral have n = 1, which is
-an anecdote, not a rate. The aggregate is still shown, labelled as mix-dependent. `out_of_scope`
+cross-domain comparison is `factual_lookup` only** (retrieval n = 66 / 59 / 65; answer-scored
+n = 63 / 59 / 65). `multi_chunk` is reported for animal-hospitals but **not compared** across
+domains — Wyatt and Austral have n = 1, which is an anecdote, not a rate. *(2026-11-02: after
+expansion `multi_chunk` n is 19 / 9 / 15, so the n = 1 rationale no longer holds; whether to
+compare `multi_chunk` across domains — Austral's 9 is still thin — is reopened for the
+supervisor.)* The aggregate is still shown, labelled as mix-dependent. `out_of_scope`
 is scored by abstention in generation, not retrieval, so it does not appear in retrieval rows.
 
 **Validity notes for the write-up.**
 - C0's retrieval section and `index_key` (`8dd9cd35699dbbce`) are identical across all three
   runs; the `config_hash` differs (OD-15 staff role and later non-retrieval config changes), and
-  the runs span git SHAs `a8171016` / `1ac1493c` / `f39a22bd`. No retrieval code change between
-  them is known, but the columns were not re-run at one SHA.
+  the runs span git SHAs `1f138e65` / `1f138e65` / `f39a22bd` (Wyatt / Austral / vet, after the
+  2026-11-02 re-run). `git diff f39a22b 1f138e6 -- src configs` is empty, so retrieval code and
+  configs are identical across all three columns; only the vet column was run at a different SHA.
 - Workflow extraction at ingest is LLM-driven and **not reproducible**: the animal-hospitals index
   had 52 workflow chunks before the 2026-11-02 re-ingest and 4 after (same config, temp 0;
   malformed-JSON discards vary). Workflow chunks were measured inert on Wyatt (docs/09
   2026-10-13), so retrieval rows are not expected to depend on this, but it is a determinism gap
   (CLAUDE.md rule 3) worth a sentence in threats to validity.
-- Optional strengthening, not done: re-run C0 on all three domains at one SHA with the current
-  test-set versions, to remove the SHA/version caveats.
+- Optional strengthening, partly done (2026-11-02): Wyatt and Austral were re-run with the
+  current test-set versions at `1f138e65`; the vet column remains at `f39a22bd` (no `src`/`configs`
+  difference between the two SHAs).
+- The Wyatt index also holds one hand-added private staff note (ingested 2026-10-27, after the
+  fingerprint). Retrieval eval runs label-but-don't-filter, but the note reached no top-5 for any
+  Wyatt case under C0/C1/C2 (checked 2026-11-02), and generation runs as `customer` (prefiltered).
 - **RQ3 out-of-scope verdicts on animal-hospitals were checked by hand** (all 12 cases × 4
   configs, 2026-11-02). The reported true-refusal counts are the manual reading; the harness's
   substring abstention detector is reported alongside, not replaced (docs/09 2026-11-02).
