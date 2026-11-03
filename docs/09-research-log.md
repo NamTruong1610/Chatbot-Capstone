@@ -8,6 +8,52 @@ with a new one.
 
 ---
 
+## 2026-11-02 — Wyatt and Austral re-run at full scale: hybrid now BEATS dense; the n=17 "hybrid regresses" finding was a small-sample artefact (MEASURED)
+
+**What changed.** The Wyatt retrieval/generation set was expanded from 17 to **100** cases
+(66 factual_lookup, 19 multi_chunk, 15 out_of_scope) and Austral to **80** (59 / 9 / 12),
+with gold fixes applied (see below). All three domains now run on identical retrieval code,
+which makes the RQ4 cross-domain comparison clean (no code-version confound).
+
+**RQ1 — the headline flipped.** On the 100-question Wyatt set, answer-hit@5 is C0 dense
+**0.634**, C1 hybrid **0.671**, C2 hybrid+rerank **0.756** — hybrid now *beats* dense, and
+the ordering is C2 > C1 > C0. This overturns the 2026-08-01 n=17 entry ("hybrid alone
+regresses"). That regression was real but unrepresentative: BM25 broke exactly two
+questions (the Advanced Diploma duration and a phone-number lookup) by pulling word-for-word
+lookalikes, and with only 17 scorable questions those two dominated the mean; at 82 scorable
+questions they are outweighed. Austral (80) shows the same ordering: 0.809 / 0.853 / 0.971.
+Reranking costs ~8× median latency (~108 ms vs ~13 ms on Wyatt). **The small-sample result
+is retained as a witnessed mechanism, not a finding — the larger set is the finding.**
+
+**RQ3 — the permissive "0.0 refusal" is confirmed a detector artefact on Wyatt at scale.**
+On the 15 Wyatt out-of-scope cases, automatic refusal-accuracy is C0 (3B strict) 0.800,
+8B strict 0.933, both permissive configs 0.000; manually verified (declines in substance),
+it is 0.867 / 1.000 / 0.933 / 0.933. The permissive 0.0 is the exact-phrase detector missing
+natural-language refusals — the same artefact measured on the vet domain (so: two domains,
+27 out-of-scope cases). Strict's own cost is over-refusal: 8B strict falsely abstained on
+19 of 85 answerable questions, 3B strict on 5, permissive on none. Containment on answerable
+cases: 0.468 / 0.619 / 0.512 / 0.537.
+
+**RQ4 — the three-domain comparison is now clean.** On the comparable single-page
+factual_lookup subset at C0, answer-hit@5 is Wyatt **0.746** < veterinary **0.815** <
+Austral **0.847** — difficulty tracks content structure (tables hardest, prose easiest,
+mixed between), and because all three ran at identical retrieval code there is no
+cross-version confound. OD-21 updated; the multi_chunk cross-domain comparison (n 19 / 9 / 15)
+is flagged as reopened for the supervisor rather than decided here.
+
+**Gold fix — the $11,500 / $11,250 "conflict" was a misreading, now resolved.** Earlier
+entries (2026-08-01, 2026-07-26) and the test set treated the Diploma of Business fee as an
+internal source conflict ($11,500 on the courses table vs $11,250 on the course page). It is
+not a conflict: **$11,500 = $11,250 tuition + $250 fee** — the course page quotes tuition,
+the table quotes the all-in total. The gold was corrected to accept $11,250 as tuition rather
+than a competing total, removing a manufactured false-miss. Recorded here because docs/09 is
+append-only (the earlier "source conflict" framing stays as written; this is its resolution).
+
+**Reproducibility note.** `results/` is gitignored, so these numbers live in the stamped
+local runs and in the final report. Re-running a config at the same config hash reproduces
+its Wyatt answers byte-for-byte; cross-code-version comparison is bounded because the one
+generative ingestion step is non-deterministic — see OD-21.
+
 ## 2026-11-02 — Third domain (Sydney Animal Hospitals): RQ1 rerank holds, isolation holds, permissive "0.0 refusal" is a detector artefact (MEASURED)
 
 **What was added.** `animal-hospitals` (Sydney Animal Hospitals, 40 crawled pages) as a third
