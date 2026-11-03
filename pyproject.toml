@@ -71,7 +71,10 @@ target-version = "py311"
 select = ["E", "F", "I", "B", "UP"]
 
 [tool.mypy]
-python_version = "3.11"
+# Match the interpreter the project actually runs on (the venv is 3.12). mypy follows typed
+# dependencies (qdrant-client etc.) into numpy, whose 2.5 stubs use 3.12-only `type` statements,
+# so a 3.11 target fails on third-party syntax rather than on our code.
+python_version = "3.12"
 strict = true
 mypy_path = "src"
 files = ["src", "tests"]
